@@ -1,0 +1,17 @@
+diff --git a/Source/TestDafny/MultiBackendTest.cs b/Source/TestDafny/MultiBackendTest.cs
+index 77746b4c8..c817700e3 100644
+--- a/Source/TestDafny/MultiBackendTest.cs
++++ b/Source/TestDafny/MultiBackendTest.cs
+@@ -346,7 +346,11 @@ public class MultiBackendTest {
+     // which just "<user temp directory>/<random name>" would not.
+     var randomName = Path.ChangeExtension(Path.GetRandomFileName(), null);
+     // Attempts at making this path longer will likely crash javac on Windows with issues like "path too long"
+-    var tempOutputDirectory = Path.Combine(Path.GetTempPath(), randomName, randomName);
++    var artifactDirectory =
++      Environment.GetEnvironmentVariable("DAFNY_TEMP_OUTPUT_DIR") ??
++      Path.GetTempPath();
++    await output.WriteLineAsync($"Artifact output directory: {artifactDirectory}");
++    var tempOutputDirectory = Path.Combine(artifactDirectory, randomName, randomName);
+     Directory.CreateDirectory(tempOutputDirectory);
+ 
+     IEnumerable<string> dafnyArgs = new List<string> {
