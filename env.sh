@@ -6,8 +6,6 @@ set -uex
 # Volume root should be set
 test -d "$VOLUME_ROOT"
 
-
-
 WORKSPACE="$VOLUME_ROOT/workspace"
 TESTBENCH="$VOLUME_ROOT/testbench"
 

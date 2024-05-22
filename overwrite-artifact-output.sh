@@ -2,7 +2,6 @@
 
 set -uex
 
-# Should source the env.sh file in mutate-csharp project before running this script
 test -f env.sh && echo "mutate-csharp-dafny/env.sh found" || { echo "mutate-csharp-dafny/env.sh not found"; exit 1; }
 source env.sh
 
