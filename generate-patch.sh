@@ -22,7 +22,7 @@ test -d "$ARTIFACT_PATH"
 test -d "$DAFNY_PROJECT_PATH"
 
 # Find the file to be patched
-FILE_TO_PATCH="Source/TestDafny/MultiBackendTest.cs"
+FILE_TO_PATCH="$DAFNY_PROJECT_PATH/Source/TestDafny/MultiBackendTest.cs"
 
 echo "Output test artifact to: $ARTIFACT_PATH"
 echo "Generating patch..."
