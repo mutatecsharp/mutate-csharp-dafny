@@ -28,11 +28,11 @@ shift $((OPTIND-1))
 
 # Set the artifact path
 if $EXPERIMENT; then
-    ARTIFACT_PATH="$EXPERIMENT_ARTIFACT_PATH"
+    COMPILED_ARTIFACT_PATH="$EXPERIMENT_ARTIFACT_PATH/compilations"
     DAFNY_PROJECT_PATH="$TESTBENCH/dafny"
     PATCH_FILE="$WORKSPACE/experiment-artifact-output.patch"
 else
-    ARTIFACT_PATH="$SUT_ARTIFACT_PATH"
+    COMPILED_ARTIFACT_PATH="$SUT_ARTIFACT_PATH/compilations"
     DAFNY_PROJECT_PATH="$WORKSPACE/dafny"
     PATCH_FILE="$WORKSPACE/sut-artifact-output.patch"
 fi
@@ -42,11 +42,10 @@ test -d "$DAFNY_PROJECT_PATH"
 # Find the file to be patched
 FILE_TO_PATCH="$DAFNY_PROJECT_PATH/Source/TestDafny/MultiBackendTest.cs"
 
-echo "Output test artifact to: $ARTIFACT_PATH"
-echo "Generating patch..."
+echo "Output test compilations to: $COMPILED_ARTIFACT_PATH"
 
 LINE_NUMBER=349
-NEW_LINE_CONTENT="    var tempOutputDirectory = Path.Combine(\"$ARTIFACT_PATH\", randomName, randomName);"
+NEW_LINE_CONTENT="    var tempOutputDirectory = Path.Combine(\"$COMPILED_ARTIFACT_PATH\", randomName, randomName);"
 
 # Modify the line in the temporary file in-place
 sed -i "${LINE_NUMBER}s|.*|$NEW_LINE_CONTENT|" "$FILE_TO_PATCH"
