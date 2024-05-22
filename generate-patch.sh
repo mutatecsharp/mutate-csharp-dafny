@@ -37,10 +37,6 @@ else
     PATCH_FILE="$WORKSPACE/sut-artifact-output.patch"
 fi
 
-echo "Artifact path: $ARTIFACT_PATH"
-echo "Dafny project path: $DAFNY_PROJECT_PATH"
-
-test -d "$ARTIFACT_PATH"
 test -d "$DAFNY_PROJECT_PATH"
 
 # Find the file to be patched
