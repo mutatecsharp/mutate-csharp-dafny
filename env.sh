@@ -19,6 +19,9 @@ SUT_DAFNY_ROOT="$WORKSPACE/dafny"
 test -d "$WORKSPACE_MUTATE_CSHARP_ROOT"
 test -d "$SUT_DAFNY_ROOT"
 
+echo "mutate-csharp directory: $WORKSPACE_MUTATE_CSHARP_ROOT"
+echo "SUT Dafny directory: $SUT_DAFNY_ROOT"
+
 export VOLUME_ROOT
 export WORKSPACE
 export TESTBENCH

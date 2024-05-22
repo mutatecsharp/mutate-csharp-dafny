@@ -7,12 +7,14 @@ test -f env.sh
 source env.sh
 
 # Set the artifact path
-if [ "$1" == "experiment" ]; then
+if [ -n "$1" ] && [ "$1" == "experiment" ]; then
     ARTIFACT_PATH="$EXPERIMENT_ARTIFACT_PATH"
     DAFNY_PROJECT_PATH="$TESTBENCH/dafny"
+    PATCH_FILE="$WORKSPACE/experiment-artifact-output.patch"
 else
     ARTIFACT_PATH="$SUT_ARTIFACT_PATH"
     DAFNY_PROJECT_PATH="$WORKSPACE/dafny"
+    PATCH_FILE="$WORKSPACE/sut-artifact-output.patch"
 fi
 
 echo "Artifact path: $ARTIFACT_PATH"
@@ -29,7 +31,6 @@ echo "Generating patch..."
 
 LINE_NUMBER=349
 NEW_LINE_CONTENT="    var tempOutputDirectory = Path.Combine($ARTIFACT_PATH, randomName, randomName);"
-PATCH_SIZE="artifact-output.patch"
 
 # Create a temporary copy of the file
 TEMP_FILE=$(mktemp)
