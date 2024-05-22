@@ -3,7 +3,9 @@
 set -uex
 
 # Set the path to the dafny project path that is under test
-VOLUME_ROOT=$(realpath "")
+# Volume root should be set
+test -d "$VOLUME_ROOT"
+
 WORKSPACE="$VOLUME_ROOT/workspace"
 TESTBENCH="$VOLUME_ROOT/testbench"
 
