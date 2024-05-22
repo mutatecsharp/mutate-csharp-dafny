@@ -46,7 +46,7 @@ echo "Output test artifact to: $ARTIFACT_PATH"
 echo "Generating patch..."
 
 LINE_NUMBER=349
-NEW_LINE_CONTENT="    var tempOutputDirectory = Path.Combine($ARTIFACT_PATH, randomName, randomName);"
+NEW_LINE_CONTENT="    var tempOutputDirectory = Path.Combine(\"$ARTIFACT_PATH\", randomName, randomName);"
 
 # Modify the line in the temporary file in-place
 sed -i "${LINE_NUMBER}s|.*|$NEW_LINE_CONTENT|" "$FILE_TO_PATCH"
