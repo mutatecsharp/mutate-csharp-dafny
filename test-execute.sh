@@ -48,7 +48,7 @@ RESULTS_DIRECTORY="$ARTIFACT_PATH/single-run-results/"
 SEQUENTIAL_RUNSETTINGS="$(pwd)/sequential.runsettings"
 
 test -d "$DAFNY_PROJECT_PATH"
-test -f "$PARALLEL_RUNSETTINGS"
+test -f "$SEQUENTIAL_RUNSETTINGS"
 
 pushd "$DAFNY_PROJECT_PATH"
 
