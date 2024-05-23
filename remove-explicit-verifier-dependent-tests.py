@@ -1,7 +1,10 @@
+#! /usr/bin/env python3.11
+
 import re
 import os
-import tempfile
+import shlex
 import subprocess
+import argparse
 
 
 def validate_volume_directory_exists():
@@ -15,62 +18,112 @@ def obtain_env_vars():
         print('Please run this script from the root of the mutate-csharp-dafny directory.')
         exit(1)
         
-    # Create a temporary shell script to source env.sh and print environment variables
-    with tempfile.NamedTemporaryFile(dir=os.getcwd(), mode='w') as temp_script:
-        temp_script.write(
-            f"""
-            #!/bin/bash
-            source {os.path.join(os.getcwd(), 'env.sh')}
-            env
-            """
-        )
-        temp_script.flush()
-        os.chmod(temp_script.name, 0o755) # make the script executable
+    env_dict = {}
         
-        # Execute the temporary script and capture the output
-        process = subprocess.Popen([f"./{temp_script.name}"], stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True)
-        stdout, stderr = process.communicate()
+    # Source env.sh and print environment variables
+    command = shlex.split("bash -c 'source env.sh && env'")
+    proc = subprocess.Popen(command, stdout = subprocess.PIPE)
+    for line in proc.stdout:
+        decoded_line = line.decode('utf-8').strip()
+        (key, _, value) = decoded_line.partition("=")
+        env_dict[key] = value
+    proc.communicate()
+    
+    return env_dict
+    
 
-        if process.returncode != 0:
-            print(f"Error sourcing env.sh: {stderr.decode()}")
-            exit(1)
-        else:
-            # Parse the output to get environment variables
-            env_vars = stdout.decode().split("\n")
-            env_dict = {}
-            for var in env_vars:
-                if "=" in var:
-                    key, value = var.split("=", 1)
-                    env_dict[key] = value
+def find_run_commands(run_pattern: re.Pattern, test_filepath: str):
+    with open(test_filepath, 'r') as file:
+        content = file.read()
         
-            return env_dict
+    return run_pattern.findall(content) # list[str]
 
 
-def find_run_commands(test_filepath: str):
-    pass
+def command_depends_on_verifier(verification_patterns, run_commands):
+    return len(run_commands) > 0 and any(pattern in single_command for pattern in verification_patterns for single_command in run_commands)
 
 
 def process_directory(directory):
-    run_commands = {}
+    run_pattern = re.compile(r'^\s*//\s*RUN:\s*(.*)$', re.MULTILINE)
+    verification_patterns = {
+        r"--no-verify:false",
+        r"--no-verify=false",
+        r"--no-verify false",
+        r"dafny verify",
+        r"%baredafny verify",
+        r"dafny generate-tests",
+        r"%baredafny generate-tests",
+        r"--verify-included-files",
+        r"-verifyAllModules",
+        r"/verifySeparately",
+        r"/dafnyVerify:1",
+        r"-dafnyVerify:1",
+        r"/prover",
+        r"/restartProver",
+        r"%verify",
+        r"%boogie",
+        r"%testDafnyForEachResolver",
+        r"dafny measure-complexity",
+        r"--solver-log",
+        r"-verificationLogger:",
+    }
+    files_to_remove = []
     
     for dirpath, _, filenames in os.walk(directory):
         for filename in filenames:
             if filename.endswith('.dfy'):
                 test_filepath = os.path.join(dirpath, filename)
-                print(test_filepath)
-                # commands = find_run_commands(test_filepath)
-                # if commands:
-                #     run_commands[filepath] = commands
+                
+                if command_depends_on_verifier(verification_patterns, find_run_commands(run_pattern, test_filepath)):
+                    files_to_remove.append(test_filepath)
+                    files_to_remove.append(f"{test_filepath}.expect")
     
-    # return run_commands
+    return files_to_remove
     
 
 if __name__ == '__main__':
+    parser = argparse.ArgumentParser()
+    parser.add_argument("-e", action='store_true', help="Experiment.")
+    parser.add_argument("--dry-run", action='store_true', help="Dry run - displays which files are to be deleted.")
+    args = parser.parse_args()
+    
     if not validate_volume_directory_exists():
         print('Volume directory not found. Please set VOLUME_ROOT environment variable.')
         exit(1)
         
     env = obtain_env_vars()
-    print(env)
     
-    process_directory()
+    # Locate dafny path based on the experiment flag
+    if args.e:
+        print("Running on non-mutated dafny codebase.")
+        dafny_path = os.path.join(env["TESTBENCH"], "dafny")
+    else:
+        dafny_path = os.path.join(env["WORKSPACE"], "dafny")
+        
+    integration_test_path = os.path.join(dafny_path, "Source", "IntegrationTests", "TestFiles", "LitTests", "LitTest")
+    generated_docs_test_path = os.path.join(dafny_path, "Test", "docexamples")
+    
+    if not os.path.exists(integration_test_path):
+        print("Dafny integration test directory not found. Please clone the git repository in the corresponding directory.")
+        exit(1)
+    
+    if not os.path.exists(generated_docs_test_path):
+        print("Dafny generated test directory not found. Please generate test files in docs using ./check-examples -c HowToFAQ/Errors-*.md.")
+        exit(1)
+    
+    integration_testfiles_to_remove = process_directory(integration_test_path)
+    generated_testfiles_to_remove = process_directory(generated_docs_test_path)
+    files_to_remove = generated_testfiles_to_remove + integration_testfiles_to_remove
+    
+    if args.dry_run:
+        print("Performing dry run.")
+
+    if args.dry_run:
+        print(f"Assessed {len(files_to_remove)} files to be removed.")
+    else:
+        for file in files_to_remove:
+            if os.path.exists(file):
+                try:
+                    os.remove(file)
+                except Exception as e:
+                    print(f"Error deleting {file}: {e}")
