@@ -2,15 +2,25 @@
 
 set -uex
 
-test -f env.sh && echo "mutate-csharp-dafny/env.sh found" || { echo "mutate-csharp-dafny/env.sh not found"; exit 1; }
-source env.sh
-
 EXPERIMENT=false
+MAYBE_NO_BUILD_FLAG=""
 
-while getopts "eh" opt; do
+usage() {
+    echo "Script to execute a specified Dafny integration test case."
+    echo "Usage: $0 [-e] [-n]"
+    echo
+    echo "Options:"
+    echo "  -e           Target the clean Dafny version."
+    echo "  -n           Do not build Dafny."
+}
+
+while getopts "enh" opt; do
     case $opt in
         e)
             EXPERIMENT=true
+            ;;
+        n)
+            MAYBE_NO_BUILD_FLAG="--no-build"
             ;;
         h)
             usage
@@ -20,6 +30,9 @@ done
 shift $((OPTIND-1))
 
 TESTCASE=$1
+
+test -f env.sh && echo "mutate-csharp-dafny/env.sh found" || { echo "mutate-csharp-dafny/env.sh not found"; exit 1; }
+source env.sh
 
 # Locate dafny path based on the experiment flag
 if $EXPERIMENT; then
@@ -40,7 +53,8 @@ test -f "$PARALLEL_RUNSETTINGS"
 pushd "$DAFNY_PROJECT_PATH"
 
 # Execute specified test
-dotnet test --no-restore -c Release --logger "console;verbosity=normal" \
+dotnet test --no-restore "$MAYBE_NO_BUILD_FLAG" -c Release \
+--logger "console;verbosity=normal" \
 --results-directory "$RESULTS_DIRECTORY" \
 --settings "$PARALLEL_RUNSETTINGS" \
 --filter "DisplayName~$TESTCASE" \
