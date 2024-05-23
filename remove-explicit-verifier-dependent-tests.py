@@ -119,13 +119,14 @@ if __name__ == '__main__':
     
     if args.dry_run:
         print("Performing dry run.")
+        
+    print(f"Assessed {len(files_to_remove)} files to be removed.")
 
-    if args.dry_run:
-        print(f"Assessed {len(files_to_remove)} files to be removed.")
-    else:
+    if not args.dry_run:
         for file in files_to_remove:
             if os.path.exists(file):
                 try:
                     os.remove(file)
+                    print("Deleted test: ", file)
                 except Exception as e:
                     print(f"Error deleting {file}: {e}")
