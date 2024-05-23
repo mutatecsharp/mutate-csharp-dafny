@@ -31,15 +31,17 @@ fi
 
 # Set the results directory (todo: categorise based on files)
 RESULTS_DIRECTORY="$ARTIFACT_PATH/results/default"
+PARALLEL_RUNSETTINGS="$(pwd)/parallel.runsettings"
 
 test -d "$DAFNY_PROJECT_PATH"
+test -f "$PARALLEL_RUNSETTINGS"
 
 pushd "$DAFNY_PROJECT_PATH"
 
 # Execute all tests (stop when first test fails)
 dotnet test --no-restore -c Release --logger "console;verbosity=normal" \
 --results-directory "$RESULTS_DIRECTORY" \
---settings "$(pwd)/parallel.runsettings" \
+--settings "$PARALLEL_RUNSETTINGS" \
 Source/IntegrationTests
 
 popd

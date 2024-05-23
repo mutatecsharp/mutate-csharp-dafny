@@ -32,15 +32,18 @@ fi
 
 # Set the results directory (todo: categorise based on files)
 RESULTS_DIRECTORY="$ARTIFACT_PATH/single-run-results/"
+PARALLEL_RUNSETTINGS="$(pwd)/parallel.runsettings"
 
 test -d "$DAFNY_PROJECT_PATH"
+test -f "$PARALLEL_RUNSETTINGS"
 
 pushd "$DAFNY_PROJECT_PATH"
 
 # Execute specified test
 dotnet test --no-restore -c Release --logger "console;verbosity=normal" \
 --results-directory "$RESULTS_DIRECTORY" \
---settings "$(pwd)/parallel.runsettings" \
---filter "DisplayName~$TESTCASE" Source/IntegrationTests
+--settings "$PARALLEL_RUNSETTINGS" \
+--filter "DisplayName~$TESTCASE" \
+Source/IntegrationTests
 
 popd
