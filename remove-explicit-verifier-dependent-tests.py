@@ -79,6 +79,7 @@ def process_directory(directory):
         r"--boogie",
         r"--solver-path",
         r"dafny audit",
+        r"%baredafny audit",
         r"%z3"
     }
     files_to_remove = []
