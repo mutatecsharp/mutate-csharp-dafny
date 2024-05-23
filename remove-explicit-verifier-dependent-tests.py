@@ -33,6 +33,7 @@ def obtain_env_vars():
 
         if process.returncode != 0:
             print(f"Error sourcing env.sh: {stderr.decode()}")
+            exit(1)
         else:
             # Parse the output to get environment variables
             env_vars = stdout.decode().split("\n")
@@ -42,7 +43,7 @@ def obtain_env_vars():
                     key, value = var.split("=", 1)
                     env_dict[key] = value
         
-    return env_dict
+            return env_dict
 
 
 def find_run_commands(test_filepath: str):
@@ -70,5 +71,6 @@ if __name__ == '__main__':
         exit(1)
         
     env = obtain_env_vars()
+    print(env)
     
-    # process_directory()
+    process_directory()
