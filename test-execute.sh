@@ -45,7 +45,7 @@ fi
 
 # Set the results directory (todo: categorise based on files)
 RESULTS_DIRECTORY="$ARTIFACT_PATH/single-run-results/"
-PARALLEL_RUNSETTINGS="$(pwd)/parallel.runsettings"
+SEQUENTIAL_RUNSETTINGS="$(pwd)/sequential.runsettings"
 
 test -d "$DAFNY_PROJECT_PATH"
 test -f "$PARALLEL_RUNSETTINGS"
@@ -56,7 +56,7 @@ pushd "$DAFNY_PROJECT_PATH"
 dotnet test --no-restore "$MAYBE_NO_BUILD_FLAG" --nologo -c Release \
 --logger "console;verbosity=normal" \
 --results-directory "$RESULTS_DIRECTORY" \
---settings "$PARALLEL_RUNSETTINGS" \
+--settings "$SEQUENTIAL_RUNSETTINGS" \
 --filter "DisplayName~$TESTCASE" \
 Source/IntegrationTests
 
