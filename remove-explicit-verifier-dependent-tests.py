@@ -36,8 +36,11 @@ def find_run_commands(run_pattern: re.Pattern, test_filepath: str):
     with open(test_filepath, 'r') as file:
         content = file.read()
         
-    return run_pattern.findall(content) # list[str]
-
+    commands = run_pattern.findall(content) # list[str]
+    # Only check for flags before '--' per POSIX convention
+    
+    command_flags = [re.split(r"\s+--\s+", command)[0] for command in commands]
+    return [flags for flags in command_flags if flags] # list[str]
 
 def command_depends_on_verifier(verification_patterns, run_commands):
     return len(run_commands) > 0 and any(pattern in single_command for pattern in verification_patterns for single_command in run_commands)
@@ -67,6 +70,16 @@ def process_directory(directory):
         r"%baredafny measure-complexity",
         r"--solver-log",
         r"-verificationLogger:",
+        r"--relax-definite-assignment",
+        r"--track-print-effects",
+        r"--disable-nonlinear-arithmetic",
+        r"--filter-symbol",
+        r"--manual-lemma-induction",
+        r"--verification-time-limit",
+        r"--boogie",
+        r"--solver-path",
+        r"dafny audit",
+        r"%z3"
     }
     files_to_remove = []
     
