@@ -42,9 +42,9 @@ rm "$DAFNY_INTEGRATION_TEST_PATH/benchmarks/sequence-race/SequenceRace.dfy"
 rm "$DAFNY_INTEGRATION_TEST_PATH/benchmarks/sequence-race/SequenceRace.dfy.expect"
 
 # git-issues/git-issue-1514.dfy
-rm "$DAFNY_INTEGRATION_TEST_PATH/git-issues/git-1514.dfy"
-rm "$DAFNY_INTEGRATION_TEST_PATH/git-issues/git-1514.dfy.expect"
-rm "$DAFNY_INTEGRATION_TEST_PATH/git-issues/git-1514.dfy.rs.check"
+rm "$DAFNY_INTEGRATION_TEST_PATH/git-issues/git-issue-1514.dfy"
+rm "$DAFNY_INTEGRATION_TEST_PATH/git-issues/git-issue-1514.dfy.expect"
+rm "$DAFNY_INTEGRATION_TEST_PATH/git-issues/git-issue-1514.dfy.rs.check"
 
 # git-issues/git-issue-1514c.dfy
 rm "$DAFNY_INTEGRATION_TEST_PATH/git-issues/git-issue-1514c.dfy"
@@ -52,6 +52,6 @@ rm "$DAFNY_INTEGRATION_TEST_PATH/git-issues/git-issue-1514c.dfy.expect"
 rm "$DAFNY_INTEGRATION_TEST_PATH/git-issues/git-issue-1514c.dfy.rs.check"
 
 # git-issues/git-issue-267.dfy
-rm "$DAFNY_INTEGRATION_TEST_PATH/git-issues/git-267.dfy"
-rm "$DAFNY_INTEGRATION_TEST_PATH/git-issues/git-267.dfy.expect"
-rm "$DAFNY_INTEGRATION_TEST_PATH/git-issues/git-267.dfy.py.check"
+rm "$DAFNY_INTEGRATION_TEST_PATH/git-issues/git-issue-267.dfy"
+rm "$DAFNY_INTEGRATION_TEST_PATH/git-issues/git-issue-267.dfy.expect"
+rm "$DAFNY_INTEGRATION_TEST_PATH/git-issues/git-issue-267.dfy.py.check"
