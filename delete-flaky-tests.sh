@@ -19,8 +19,6 @@ while getopts "eh" opt; do
 done
 shift $((OPTIND-1))
 
-TESTCASE=$1
-
 # Locate dafny path based on the experiment flag
 if $EXPERIMENT; then
     DAFNY_PROJECT_PATH="$TESTBENCH/dafny"
