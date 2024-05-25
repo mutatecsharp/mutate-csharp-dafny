@@ -38,9 +38,16 @@ test -d "$MUTATE_CSHARP_PATH"
 test -d "$ARTIFACT_PATH"
 test -d "$DAFNY_PROJECT_PATH"
 
+# Build mutate-csharp
+pushd $MUTATE_CSHARP_PATH
+test $MAYBE_NO_BUILD_FLAG || dotnet build -c Release MutateCSharp.sln
+popd
+
+test -x "$MUTATE_CSHARP_PATH/artifacts/MutateCSharp/bin/Release/net8.0/MutateCSharp"
+
 # Mutate dafny
-.$MUTATE_CSHARP_PATH/bin/Release/net8.0/MutateCSharp \
-mutate --omit-redundant \
+$MUTATE_CSHARP_PATH/artifacts/MutateCSharp/bin/Release/net8.0/MutateCSharp \
+mutate --omit-redundant --dry-run \
 --project "$DAFNY_PROJECT_PATH/Source/DafnyCore/DafnyCore.csproj" \
 --directories "$DAFNY_PROJECT_PATH/Source/DafnyCore/Backends" \
 --ignore-files /mnt/volume_lon1_02/workspace/dafny/Source/DafnyCore/Parser.cs \
