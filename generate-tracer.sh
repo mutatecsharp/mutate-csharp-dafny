@@ -2,25 +2,12 @@
 
 set -uex
 
-DRY_RUN=""
-MAYBE_NO_BUILD_FLAG=""
-
 usage() {
-    echo "Script to mutate the Dafny compiler."
-    echo "Usage: $0 [-n]"
-    echo
-    echo "Options:"
-    echo "  -n           Do not build Dafny."
+    echo "Script to generate mutant execution tracer for the Dafny compiler."
 }
 
-while getopts "nhd" opt; do
+while getopts "h" opt; do
     case $opt in
-        n)
-            MAYBE_NO_BUILD_FLAG="--no-build"
-            ;;
-        d)
-            DRY_RUN="--dry-run"
-            ;;
         h)
             usage
             ;;
@@ -41,14 +28,14 @@ test -d "$DAFNY_PROJECT_PATH"
 
 # Build mutate-csharp
 pushd $MUTATE_CSHARP_PATH
-test $MAYBE_NO_BUILD_FLAG || dotnet build -c Release MutateCSharp.sln
+dotnet build -c Release MutateCSharp.sln
 popd
 
 test -x "$MUTATE_CSHARP_PATH/artifacts/MutateCSharp/bin/Release/net8.0/MutateCSharp"
 
 # Mutate dafny
 $MUTATE_CSHARP_PATH/artifacts/MutateCSharp/bin/Release/net8.0/MutateCSharp \
-mutate --omit-redundant "$DRY_RUN" \
+generate-tracer --omit-redundant \
 --project "$DAFNY_PROJECT_PATH/Source/DafnyCore/DafnyCore.csproj" \
 --directories "$DAFNY_PROJECT_PATH/Source/DafnyCore/Backends" \
 --ignore-files "$DAFNY_PROJECT_PATH/Source/DafnyCore/Parser.cs" \
