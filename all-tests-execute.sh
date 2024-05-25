@@ -6,7 +6,7 @@ EXPERIMENT=false
 MAYBE_NO_BUILD_FLAG=""
 
 usage() {
-    echo "Script to execute a specified Dafny integration test case."
+    echo "Script to execute the Dafny integration test suite."
     echo "Usage: $0 [-e] [-n]"
     echo
     echo "Options:"
