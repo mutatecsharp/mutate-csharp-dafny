@@ -46,6 +46,11 @@ rm "$DAFNY_INTEGRATION_TEST_PATH/git-issues/git-issue-1514.dfy"
 rm "$DAFNY_INTEGRATION_TEST_PATH/git-issues/git-issue-1514.dfy.expect"
 rm "$DAFNY_INTEGRATION_TEST_PATH/git-issues/git-issue-1514.dfy.rs.check"
 
+# git-issues/git-issue-1514b.dfy
+rm "$DAFNY_INTEGRATION_TEST_PATH/git-issues/git-issue-1514b.dfy"
+rm "$DAFNY_INTEGRATION_TEST_PATH/git-issues/git-issue-1514b.dfy.expect"
+rm "$DAFNY_INTEGRATION_TEST_PATH/git-issues/git-issue-1514b.dfy.rs.check"
+
 # git-issues/git-issue-1514c.dfy
 rm "$DAFNY_INTEGRATION_TEST_PATH/git-issues/git-issue-1514c.dfy"
 rm "$DAFNY_INTEGRATION_TEST_PATH/git-issues/git-issue-1514c.dfy.expect"
@@ -55,3 +60,16 @@ rm "$DAFNY_INTEGRATION_TEST_PATH/git-issues/git-issue-1514c.dfy.rs.check"
 rm "$DAFNY_INTEGRATION_TEST_PATH/git-issues/git-issue-267.dfy"
 rm "$DAFNY_INTEGRATION_TEST_PATH/git-issues/git-issue-267.dfy.expect"
 rm "$DAFNY_INTEGRATION_TEST_PATH/git-issues/git-issue-267.dfy.py.check"
+
+# git-issues/git-issue-697j.dfy
+rm "$DAFNY_INTEGRATION_TEST_PATH/git-issues/git-issue-697j.dfy"
+rm "$DAFNY_INTEGRATION_TEST_PATH/git-issues/git-issue-697j.dfy.expect"
+rm "$DAFNY_INTEGRATION_TEST_PATH/git-issues/git-issue-697j.dfy.rs.check"
+rm "$DAFNY_INTEGRATION_TEST_PATH/git-issues/git-issue-697j.dfy.verifier.expect"
+
+# stdlibs/StandardLibraries_TargetSpecific.dfy
+rm "$DAFNY_INTEGRATION_TEST_PATH/stdlibs/StandardLibraries_TargetSpecific.dfy"
+rm "$DAFNY_INTEGRATION_TEST_PATH/stdlibs/StandardLibraries_TargetSpecific.dfy.cpp.check"
+rm "$DAFNY_INTEGRATION_TEST_PATH/stdlibs/StandardLibraries_TargetSpecific.dfy.dfy.check"
+rm "$DAFNY_INTEGRATION_TEST_PATH/stdlibs/StandardLibraries_TargetSpecific.dfy.rs.check"
+rm "$DAFNY_INTEGRATION_TEST_PATH/stdlibs/StandardLibraries_TargetSpecific.dfy.expect"
