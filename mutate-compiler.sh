@@ -3,6 +3,7 @@
 set -uex
 
 EXPERIMENT=false
+DRY_RUN=""
 MAYBE_NO_BUILD_FLAG=""
 
 usage() {
@@ -13,10 +14,13 @@ usage() {
     echo "  -n           Do not build Dafny."
 }
 
-while getopts "nh" opt; do
+while getopts "nhd" opt; do
     case $opt in
         n)
             MAYBE_NO_BUILD_FLAG="--no-build"
+            ;;
+        d)
+            DRY_RUN="--dry-run"
             ;;
         h)
             usage
@@ -47,7 +51,7 @@ test -x "$MUTATE_CSHARP_PATH/artifacts/MutateCSharp/bin/Release/net8.0/MutateCSh
 
 # Mutate dafny
 $MUTATE_CSHARP_PATH/artifacts/MutateCSharp/bin/Release/net8.0/MutateCSharp \
-mutate --omit-redundant --dry-run \
+mutate --omit-redundant "$DRY_RUN" \
 --project "$DAFNY_PROJECT_PATH/Source/DafnyCore/DafnyCore.csproj" \
 --directories "$DAFNY_PROJECT_PATH/Source/DafnyCore/Backends" \
 --ignore-files /mnt/volume_lon1_02/workspace/dafny/Source/DafnyCore/Parser.cs \
