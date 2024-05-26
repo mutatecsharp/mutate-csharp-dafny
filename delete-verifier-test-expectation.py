@@ -69,7 +69,7 @@ def delete_lines_in_file(file_path):
             print(f"-{line.strip()}")
             continue
             
-        modified_lines.append(modified_line)
+        modified_lines.append(line)
 
     # Write the modified content back to the file
     with open(file_path, 'w') as file:
