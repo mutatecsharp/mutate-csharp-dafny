@@ -32,7 +32,7 @@ def obtain_env_vars():
     return env_dict
 
 
-def replace_lines_in_file(file_path):
+def delete_lines_in_file(file_path):
     # Define the pattern with capturing groups for the parts to be preserved
     basic_pattern = re.compile(r'(Dafny program verifier finished with )\d+( verified, )\d+( errors?)')
     check_pattern = re.compile(r'(// CHECK: .*Dafny program verifier finished with )\d+( verified, )\d+( errors.*)')
@@ -58,14 +58,18 @@ def replace_lines_in_file(file_path):
     with open(file_path, 'r') as file:
         lines = file.readlines()
 
-    # Replace the matching lines
     # If the pattern is not found, the original line is written back unmodified
-    modified_lines = [basic_pattern.sub(basic_replacement, check_pattern.sub(advanced_replacement, line)) for line in lines]
+    modified_lines = []
     
-    for line_number, modified_line in enumerate(modified_lines):
-        if modified_line != lines[line_number]:
-            print(f"-{lines[line_number].strip()}")
-            print(f"+{modified_line.strip()}")
+    for line in lines:
+        modified_line = basic_pattern.sub(basic_replacement, check_pattern.sub(advanced_replacement, line))
+        
+        # Remove the line matching the pattern
+        if modified_line != line:
+            print(f"-{line.strip()}")
+            continue
+            
+        modified_lines.append(modified_line)
 
     # Write the modified content back to the file
     with open(file_path, 'w') as file:
@@ -82,7 +86,7 @@ def process_directory(directory):
             if any(expect_filepath.endswith(extension) for extension in supported_extensions):
                 # Replace the lines in the file
                 print(f"Processing {expect_filepath}.")
-                replace_lines_in_file(expect_filepath)
+                delete_lines_in_file(expect_filepath)
                 
 
 if __name__ == '__main__':
