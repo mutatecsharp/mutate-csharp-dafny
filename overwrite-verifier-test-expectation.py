@@ -33,9 +33,16 @@ def obtain_env_vars():
 
 
 def replace_lines_in_file(file_path):
-    # Define the pattern to match
-    pattern = re.compile(r'Dafny program verifier finished with \d+ verified, \d+ errors')
-    replacement = 'Dafny program verifier finished with 0 verified, 0 errors'
+    # Define the pattern with capturing groups for the parts to be preserved
+    pattern = re.compile(r'(Dafny program verifier finished with )\d+( verified, )(\d+ error(s?))')
+
+    def replacement(match):
+        # Extract captured groups
+        prefix = match.group(1)
+        verified_text = match.group(2)
+
+        # Replace numbers with 0 and construct the replacement string
+        return f'{prefix}0{verified_text}0 errors'
 
     # Read the file content
     with open(file_path, 'r') as file:
