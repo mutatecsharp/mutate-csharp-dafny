@@ -44,12 +44,15 @@ def replace_lines_in_file(file_path):
     # Replace the matching lines
     # If the pattern is not found, the original line is written back unmodified
     modified_lines = [pattern.sub(replacement, line) for line in lines]
+    
+    for line_number, modified_line in enumerate(modified_lines):
+        if modified_line != lines[line_number]:
+            print(f"-{lines[line_number].strip()}")
+            print(f"+{modified_line.strip()}")
 
     # Write the modified content back to the file
     with open(file_path, 'w') as file:
         file.writelines(modified_lines)
-
-    print(f"Replaced lines in {file_path}.")
     
     
 def process_directory(directory):
@@ -59,6 +62,7 @@ def process_directory(directory):
                 expect_filepath = os.path.join(dirpath, filename)
                 
                 # Replace the lines in the file
+                print(f"Processing {expect_filepath}.")
                 replace_lines_in_file(expect_filepath)
                 
 
