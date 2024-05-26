@@ -73,13 +73,16 @@ def replace_lines_in_file(file_path):
     
     
 def process_directory(directory):
+    supported_extensions = {'.dfy', '.expect', '.check'}
+    
     for dirpath, _, filenames in os.walk(directory):
         for filename in filenames:
             expect_filepath = os.path.join(dirpath, filename)
             
-            # Replace the lines in the file
-            print(f"Processing {expect_filepath}.")
-            replace_lines_in_file(expect_filepath)
+            if any(expect_filepath.endswith(extension) for extension in supported_extensions):
+                # Replace the lines in the file
+                print(f"Processing {expect_filepath}.")
+                replace_lines_in_file(expect_filepath)
                 
 
 if __name__ == '__main__':
