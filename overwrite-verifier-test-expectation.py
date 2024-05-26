@@ -75,12 +75,11 @@ def replace_lines_in_file(file_path):
 def process_directory(directory):
     for dirpath, _, filenames in os.walk(directory):
         for filename in filenames:
-            if filename.endswith('.expect'):
-                expect_filepath = os.path.join(dirpath, filename)
-                
-                # Replace the lines in the file
-                print(f"Processing {expect_filepath}.")
-                replace_lines_in_file(expect_filepath)
+            expect_filepath = os.path.join(dirpath, filename)
+            
+            # Replace the lines in the file
+            print(f"Processing {expect_filepath}.")
+            replace_lines_in_file(expect_filepath)
                 
 
 if __name__ == '__main__':
