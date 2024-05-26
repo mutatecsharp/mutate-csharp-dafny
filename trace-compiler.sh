@@ -3,24 +3,13 @@
 set -uex
 
 DRY_RUN=""
-MAYBE_NO_BUILD_FLAG=""
 
 usage() {
     echo "Script to trace the Dafny compiler mutant execution."
-    echo "Usage: $0 [-n]"
-    echo
-    echo "Options:"
-    echo "  -n           Do not build Dafny."
 }
 
-while getopts "nhd" opt; do
+while getopts "hd" opt; do
     case $opt in
-        n)
-            MAYBE_NO_BUILD_FLAG="--no-build"
-            ;;
-        d)
-            DRY_RUN="--dry-run"
-            ;;
         h)
             usage
             ;;
