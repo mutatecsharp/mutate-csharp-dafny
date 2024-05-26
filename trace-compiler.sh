@@ -31,7 +31,7 @@ test "$SUT_ARTIFACT_PATH"
 
 # Build mutate-csharp
 pushd $MUTATE_CSHARP_PATH
-test $MAYBE_NO_BUILD_FLAG || dotnet build -c Release MutateCSharp.sln
+dotnet build -c Release MutateCSharp.sln
 popd
 
 test -x "$MUTATE_CSHARP_PATH/artifacts/MutateCSharp/bin/Release/net8.0/MutateCSharp"
