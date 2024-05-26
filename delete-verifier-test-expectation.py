@@ -61,26 +61,25 @@ def delete_lines_in_file(file_path):
     # If the pattern is not found, the original line is written back unmodified
     modified_lines = []
     
-    for line_number, line in enumerate(lines):
+    for line in lines:
         modified_line = basic_pattern.sub(basic_replacement, check_pattern.sub(advanced_replacement, line))
         
         # Remove the line matching the pattern
         if modified_line != line:
             print(f"-{line.strip()}")
-            
-            # Also remove previous line if it is sandwiched between two empty lines
-            if len(modified_lines) > 0 and line_number + 1 < len(lines) and len(modified_lines[-1].strip()) == 0 and len(lines[line_number + 1].strip()) == 0:
-                modified_lines.pop()
-            
             continue
             
         modified_lines.append(line)
+        
+    # Remove lines if all lines are empty
+    if all(len(line.strip()) == 0 for line in modified_lines):
+        modified_lines = []
 
     # Write the modified content back to the file
     with open(file_path, 'w') as file:
         file.writelines(modified_lines)
-    
-    
+
+
 def process_directory(directory):
     supported_extensions = {'.dfy', '.expect', '.check'}
     
