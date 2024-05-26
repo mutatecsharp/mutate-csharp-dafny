@@ -61,12 +61,17 @@ def delete_lines_in_file(file_path):
     # If the pattern is not found, the original line is written back unmodified
     modified_lines = []
     
-    for line in lines:
+    for line_number, line in enumerate(lines):
         modified_line = basic_pattern.sub(basic_replacement, check_pattern.sub(advanced_replacement, line))
         
         # Remove the line matching the pattern
         if modified_line != line:
             print(f"-{line.strip()}")
+            
+            # Also remove previous line if it is sandwiched between two empty lines
+            if line_number + 1 < len(lines) and lines[line_number - 1].strip() == '' and lines[line_number + 1].strip() == '':
+                modified_lines.pop()
+            
             continue
             
         modified_lines.append(line)
