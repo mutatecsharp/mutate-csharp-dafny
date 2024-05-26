@@ -42,7 +42,6 @@ def get_mutated_file_count(registry_path: str):
         print(value["EnvironmentVariable"])
         match = re.search(pattern, value["EnvironmentVariable"])
         if match:
-            print(match.group())
             max_env_var = max(max_env_var, int(match.group()))
         
     return max_env_var
