@@ -34,8 +34,8 @@ def obtain_env_vars():
 
 def replace_lines_in_file(file_path):
     # Define the pattern with capturing groups for the parts to be preserved
-    basic_pattern = re.compile(r'(Dafny program verifier finished with )\d+( verified, )(\d+ error(s?))')
-    check_pattern = re.compile(r'(.*CHECK:.*Dafny program verifier finished with )\d+( verified, )(\d+ error(s?))(.*)')
+    basic_pattern = re.compile(r'(Dafny program verifier finished with )\d+( verified, )(\d+ errors?)')
+    check_pattern = re.compile(r'(.*CHECK:.*Dafny program verifier finished with )\d+( verified, )(\d+ errors?)(.*)')
 
     def basic_replacement(match):
         # Extract captured groups        
@@ -60,7 +60,7 @@ def replace_lines_in_file(file_path):
 
     # Replace the matching lines
     # If the pattern is not found, the original line is written back unmodified
-    modified_lines = [check_pattern.sub(advanced_replacement, basic_pattern.sub(basic_replacement, line)) for line in lines]
+    modified_lines = [basic_pattern.sub(basic_replacement, check_pattern.sub(advanced_replacement, line)) for line in lines]
     
     for line_number, modified_line in enumerate(modified_lines):
         if modified_line != lines[line_number]:
