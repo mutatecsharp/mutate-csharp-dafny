@@ -41,7 +41,7 @@ $MUTATE_CSHARP_PATH/artifacts/MutateCSharp/bin/Release/net8.0/MutateCSharp \
 trace \
 --test-project "$DAFNY_PROJECT_PATH/Source/IntegrationTests" \
 --output-directory "$SUT_ARTIFACT_PATH/execution-trace" \
---tests-list "$SUT_ARTIFACT_PATH/execution-trace/tests-list.txt" \
+--tests-list "$DAFNY_PROJECT_PATH/all-tests.txt" \
 --mutation-registry "$DAFNY_PROJECT_PATH/Source/DafnyCore/registry.mucs.json" \
 --tracer-registry "$DAFNY_PROJECT_PATH/Source/DafnyCore/tracer-registry.mucs.json" \
 --testrun-settings "$(pwd)/basic.runsettings"
