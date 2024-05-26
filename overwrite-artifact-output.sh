@@ -29,11 +29,9 @@ shift $((OPTIND-1))
 if $EXPERIMENT; then
     COMPILED_ARTIFACT_PATH="$EXPERIMENT_ARTIFACT_PATH/compilations"
     DAFNY_PROJECT_PATH="$TESTBENCH/dafny"
-    PATCH_FILE="$WORKSPACE/experiment-artifact-output.patch"
 else
     COMPILED_ARTIFACT_PATH="$SUT_ARTIFACT_PATH/compilations"
     DAFNY_PROJECT_PATH="$WORKSPACE/dafny"
-    PATCH_FILE="$WORKSPACE/sut-artifact-output.patch"
 fi
 
 test -d "$DAFNY_PROJECT_PATH"
