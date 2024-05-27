@@ -79,14 +79,6 @@ def parse_trx_result(trx_path: str):
     return results
 
 
-def format_timedelta(td):
-        total_seconds = int(td.total_seconds())
-        hours, remainder = divmod(total_seconds, 3600)
-        minutes, seconds = divmod(remainder, 60)
-        microseconds = td.microseconds
-        return f"{hours:02}:{minutes:02}:{seconds:02}.{microseconds:06}"
-    
-
 def print_test_summary(results):
     total_tests = len(results)
     passed_tests = len([result for result in results if result['outcome'] == 'Passed'])
@@ -99,6 +91,7 @@ def print_test_summary(results):
 
 def print_passing_tests(results: list, sort_by_duration: bool, verbose: bool):
     passed_results = [result for result in results if result['outcome'] == 'Passed']
+    
     if sort_by_duration:
         passed_results.sort(key=lambda x: (x['duration']))
     
@@ -108,8 +101,12 @@ def print_passing_tests(results: list, sort_by_duration: bool, verbose: bool):
             print(f"Duration: {result['duration']}")
             print('-' * 40)
         
-        duration = sum((result['duration'] for result in passed_results), datetime.timedelta())
-        print(f"Passed tests total duration: {format_timedelta(duration)}")
+        passed_duration = sum((result['duration'] for result in passed_results), datetime.timedelta())
+        
+        failed_results = [result for result in results if result['outcome'] == 'Failed']
+        failed_duration = sum((result['duration'] for result in failed_results), datetime.timedelta())
+        print(f"Passed tests total duration (Sequential): {passed_duration}")
+        print(f"Failed tests total duration (Sequential): {failed_duration}")
     else:
         for result in passed_results:
             print(result['test_name'])
