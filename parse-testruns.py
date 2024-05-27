@@ -113,7 +113,7 @@ def print_passing_tests(results: list, sort_by_duration: bool, verbose: bool):
             print(result['test_name'])
             
             
-def print_failed_test(results: list, verbose: bool):
+def print_failed_tests(results: list, verbose: bool):
     failed_results = [result for result in results if result['outcome'] == 'Failed']
     
     if verbose:
@@ -164,6 +164,8 @@ if __name__ == '__main__':
     if args.passing_tests:
         print_passing_tests(test_results, args.ascending_duration, args.verbose)
     elif args.failed_tests:
+        if args.ascending_duration:
+            print(f"Note: --ascending-duration flag is ignored for failed tests.")
         print_failed_tests(test_results, args.verbose)
     else:
         print_test_results(test_results)
