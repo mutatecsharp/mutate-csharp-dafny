@@ -105,7 +105,7 @@ if __name__ == '__main__':
     env = obtain_env_vars()
     
     # Parse the .trx file
-    test_results = parse_trx_result(args.trx_file)
+    test_results = parse_trx_result(args["trx-file"])
     print_test_results(test_results)
     print_test_summary(test_results)
     
