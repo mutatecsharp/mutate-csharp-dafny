@@ -50,7 +50,8 @@ def parse_trx_result(trx_path: str):
     def convert_to_timedelta(duration):
         hours, minutes, seconds = duration.split(':')
         seconds, microseconds = seconds.split('.')
-        return datetime.strptime(f"{hours}:{minutes}:{seconds}.{microseconds[:6]}", "%H:%M:%S.%f")
+        return datetime.timedelta(hours=int(hours), minutes=int(minutes), seconds=int(seconds), microseconds=int(microseconds))
+
     
     for unit_test_result in root.findall('.//ns:UnitTestResult', namespace):
         test_name = unit_test_result.get('testName')
