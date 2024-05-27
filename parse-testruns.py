@@ -82,12 +82,20 @@ def print_test_summary(results):
     print(f"Failed Tests: {failed_tests}")
     
 
-def print_passing_tests(results):
-    for result in results:
-        if result['outcome'] == 'Passed':
-            print(f"Test Name: {result['test_name']}")
-            print(f"Duration: {result['duration']}")
-            print('-' * 40)
+def print_passing_tests(results: list, verbose: bool):
+    if verbose:
+        for result in results:
+            if result['outcome'] == 'Passed':
+                print(f"Test Name: {result['test_name']}")
+                print(f"Duration: {result['duration']}")
+                print('-' * 40)
+        
+            duration = sum(float(result['duration']) for result in results if result['outcome'] == 'Passed')
+            print(f"Passed tests total duration: {duration}")
+    else:
+        for result in results:
+            if result['outcome'] == 'Passed':
+                print(result['test_name'])
 
 
 def print_test_results(results):
@@ -105,6 +113,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument("trx_file", type=str, help="Parses .trx file and extracts test run information.")
     parser.add_argument("--passing-tests", action="store_true", help="Print passing tests.")
+    parser.add_argument("--verbose", action="store_true", help="Print verbose output.")
     args = parser.parse_args()
     
     if not validate_volume_directory_exists():
@@ -117,7 +126,7 @@ if __name__ == '__main__':
     test_results = parse_trx_result(args.trx_file)
     
     if args.passing_tests:
-        print_passing_tests(test_results)
+        print_passing_tests(test_results, args.verbose)
     else:
         print_test_results(test_results)
         print_test_summary(test_results)
