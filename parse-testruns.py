@@ -50,6 +50,7 @@ def parse_trx_result(trx_path: str):
     def convert_to_timedelta(duration):
         hours, minutes, seconds = duration.split(':')
         seconds, microseconds = seconds.split('.')
+        microseconds = microseconds[:-1]
         return datetime.timedelta(hours=int(hours), minutes=int(minutes), seconds=int(seconds), microseconds=int(microseconds))
 
     
