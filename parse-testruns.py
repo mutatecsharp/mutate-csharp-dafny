@@ -80,6 +80,14 @@ def print_test_summary(results):
     print(f"Total Tests: {total_tests}")
     print(f"Passed Tests: {passed_tests}")
     print(f"Failed Tests: {failed_tests}")
+    
+
+def print_passing_tests(results):
+    for result in results:
+        if result['outcome'] == 'Passed':
+            print(f"Test Name: {result['test_name']}")
+            print(f"Duration: {result['duration']}")
+            print('-' * 40)
 
 
 def print_test_results(results):
@@ -96,6 +104,7 @@ def print_test_results(results):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument("trx_file", type=str, help="Parses .trx file and extracts test run information.")
+    parser.add_argument("--passing-tests", action="store_true", help="Print passing tests.")
     args = parser.parse_args()
     
     if not validate_volume_directory_exists():
@@ -106,6 +115,10 @@ if __name__ == '__main__':
     
     # Parse the .trx file
     test_results = parse_trx_result(args.trx_file)
-    print_test_results(test_results)
-    print_test_summary(test_results)
+    
+    if args.passing_tests:
+        print_passing_tests(test_results)
+    else:
+        print_test_results(test_results)
+        print_test_summary(test_results)
     
