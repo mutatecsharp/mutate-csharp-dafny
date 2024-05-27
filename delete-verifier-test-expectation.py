@@ -70,10 +70,6 @@ def delete_lines_in_file(file_path):
             continue
             
         modified_lines.append(line)
-        
-    # Remove lines if all lines are empty
-    if all(len(line.strip()) == 0 for line in modified_lines):
-        modified_lines = []
 
     # Write the modified content back to the file
     with open(file_path, 'w') as file:
