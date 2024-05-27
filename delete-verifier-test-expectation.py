@@ -32,28 +32,7 @@ def obtain_env_vars():
     return env_dict
 
 
-def delete_lines_in_file(file_path):
-    # Define the pattern with capturing groups for the parts to be preserved
-    basic_pattern = re.compile(r'(Dafny program verifier finished with )\d+( verified, )\d+( errors?)')
-    check_pattern = re.compile(r'(// CHECK: .*Dafny program verifier finished with )\d+( verified, )\d+( errors.*)')
-
-    def basic_replacement(match):
-        # Extract captured groups        
-        prefix = match.group(1)
-        verified_text = match.group(2)
-
-        # Replace numbers with 0 and construct the replacement string
-        return f'{prefix}0{verified_text}0 errors'
-    
-    def advanced_replacement(match):
-        # Extract captured groups        
-        prefix = match.group(1)
-        verified_text = match.group(2)
-        suffix = match.group(3)
-
-        # Replace numbers with 0 and construct the replacement string
-        return f'{prefix}0{verified_text}0{suffix}'
-
+def delete_lines_in_file(file_path, patterns):
     # Read the file content
     with open(file_path, 'r') as file:
         lines = file.readlines()
@@ -61,10 +40,8 @@ def delete_lines_in_file(file_path):
     # If the pattern is not found, the original line is written back unmodified
     modified_lines = []
     
-    for line_number, line in enumerate(lines):
-        modified_line = basic_pattern.sub(basic_replacement, check_pattern.sub(advanced_replacement, line))
-        
-        if modified_line != line:
+    for line in lines:
+        if any(pattern.search(line) for pattern in patterns):
             print(f"-{line.strip()}")
             
             # Also remove the previous empty line
@@ -83,6 +60,14 @@ def delete_lines_in_file(file_path):
 def process_directory(directory):
     supported_extensions = {'.dfy', '.expect', '.check'}
     
+    # Define the pattern with capturing groups for the parts to be preserved
+    did_not_attempt = re.compile(r'Dafny program verifier did not attempt verification')
+    basic_pattern = re.compile(r'(Dafny program verifier finished with )\d+( verified, )\d+( errors?)')
+    basic_assertion_pattern = re.compile(r'(Dafny program verifier finished with )\d+( assertions verified, )\d+( errors?)')
+    check_pattern = re.compile(r'(// CHECK: .*Dafny program verifier finished with )\d+( verified, )\d+( errors?.*)')
+    check_assertion_pattern = re.compile(r'(// CHECK: .*Dafny program verifier finished with )\d+( assertions verified, )\d+( errors?.*)')
+    patterns = [did_not_attempt, basic_pattern, check_pattern, basic_assertion_pattern, check_assertion_pattern]
+    
     for dirpath, _, filenames in os.walk(directory):
         for filename in filenames:
             expect_filepath = os.path.join(dirpath, filename)
@@ -90,7 +75,7 @@ def process_directory(directory):
             if any(expect_filepath.endswith(extension) for extension in supported_extensions):
                 # Replace the lines in the file
                 print(f"Processing {expect_filepath}.")
-                delete_lines_in_file(expect_filepath)
+                delete_lines_in_file(expect_filepath, patterns)
                 
 
 if __name__ == '__main__':
