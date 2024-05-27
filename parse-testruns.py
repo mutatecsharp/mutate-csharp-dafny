@@ -79,6 +79,14 @@ def parse_trx_result(trx_path: str):
     return results
 
 
+def format_timedelta(td):
+        total_seconds = int(td.total_seconds())
+        hours, remainder = divmod(total_seconds, 3600)
+        minutes, seconds = divmod(remainder, 60)
+        microseconds = td.microseconds
+        return f"{hours:02}:{minutes:02}:{seconds:02}.{microseconds:06}"
+    
+
 def print_test_summary(results):
     total_tests = len(results)
     passed_tests = len([result for result in results if result['outcome'] == 'Passed'])
@@ -101,7 +109,7 @@ def print_passing_tests(results: list, sort_by_duration: bool, verbose: bool):
             print('-' * 40)
         
         duration = sum((result['duration'] for result in passed_results), datetime.timedelta())
-        print(f"Passed tests total duration: {duration}")
+        print(f"Passed tests total duration: {format_timedelta(duration)}")
     else:
         for result in passed_results:
             print(result['test_name'])
