@@ -1,6 +1,7 @@
 #! /usr/bin/env python3.11
 
 import os
+import datetime
 import shlex
 import argparse
 import subprocess
@@ -46,6 +47,11 @@ def parse_trx_result(trx_path: str):
     # Extract the test results
     results = []
     
+    def convert_to_timedelta(duration):
+        hours, minutes, seconds = duration.split(':')
+        seconds, microseconds = seconds.split('.')
+        return datetime.strptime(f"{hours}:{minutes}:{seconds}.{microseconds[:6]}", "%H:%M:%S.%f")
+    
     for unit_test_result in root.findall('.//ns:UnitTestResult', namespace):
         test_name = unit_test_result.get('testName')
         outcome = unit_test_result.get('outcome')
@@ -64,7 +70,7 @@ def parse_trx_result(trx_path: str):
         results.append({
             'test_name': test_name,
             'outcome': outcome,
-            'duration': duration,
+            'duration': convert_to_timedelta(duration),
             'error_message': error_message,
             'error_stack_trace': error_stack_trace
         })
@@ -85,7 +91,7 @@ def print_test_summary(results):
 def print_passing_tests(results: list, sort_by_duration: bool, verbose: bool):
     passed_results = [result for result in results if result['outcome'] == 'Passed']
     if sort_by_duration:
-        passed_results.sort(key=lambda x: float(x['duration']))
+        passed_results.sort(key=lambda x: (x['duration']))
     
     if verbose:
         for result in passed_results:
@@ -93,7 +99,7 @@ def print_passing_tests(results: list, sort_by_duration: bool, verbose: bool):
             print(f"Duration: {result['duration']}")
             print('-' * 40)
         
-        duration = sum(float(result['duration']) for result in passed_results)
+        duration = sum([result['duration'] for result in passed_results], datetime.timedelta())
         print(f"Passed tests total duration: {duration}")
     else:
         for result in passed_results:
