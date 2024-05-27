@@ -95,7 +95,7 @@ def print_test_results(results):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument("trx-file", type=str, required=True, help="Parses .trx file and extracts test run information.")
+    parser.add_argument("trx-file", type=str, help="Parses .trx file and extracts test run information.")
     args = parser.parse_args()
     
     if not validate_volume_directory_exists():
