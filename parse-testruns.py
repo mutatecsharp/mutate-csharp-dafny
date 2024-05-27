@@ -105,6 +105,7 @@ def print_passing_tests(results: list, sort_by_duration: bool, verbose: bool):
         passed_duration = sum((result['duration'] for result in passed_results), datetime.timedelta())
         
         failed_results = [result for result in results if result['outcome'] == 'Failed']
+        assert len(passed_results) + len(failed_results) == len(results)
         failed_duration = sum((result['duration'] for result in failed_results), datetime.timedelta())
         print(f"Passed tests total duration (Sequential): {passed_duration}")
         print(f"Failed tests total duration (Sequential): {failed_duration}")
@@ -121,7 +122,7 @@ def print_failed_tests(results: list, verbose: bool):
             print(f"Test Name: {result['test_name']}")
             print(f"Duration: {result['duration']}")
             print(f"Error Message: {result['error_message']}")
-            print(f"Error Stack Trace: {result['error_stack_trace']}")
+            # print(f"Error Stack Trace: {result['error_stack_trace']}")
             print('-' * 40)
     else:
         for result in failed_results:
