@@ -111,6 +111,21 @@ def print_passing_tests(results: list, sort_by_duration: bool, verbose: bool):
     else:
         for result in passed_results:
             print(result['test_name'])
+            
+            
+def print_failed_test(results: list, verbose: bool):
+    failed_results = [result for result in results if result['outcome'] == 'Failed']
+    
+    if verbose:
+        for result in failed_results:
+            print(f"Test Name: {result['test_name']}")
+            print(f"Duration: {result['duration']}")
+            print(f"Error Message: {result['error_message']}")
+            print(f"Error Stack Trace: {result['error_stack_trace']}")
+            print('-' * 40)
+    else:
+        for result in failed_results:
+            print(result['test_name'])
 
 
 def print_test_results(results):
@@ -128,6 +143,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument("trx_file", type=str, help="Parses .trx file and extracts test run information.")
     parser.add_argument("--passing-tests", action="store_true", help="Print passing tests.")
+    parser.add_argument("--failed-tests", action="store_true", help="Print failed tests.")
     parser.add_argument("--verbose", action="store_true", help="Print verbose output.")
     parser.add_argument("--ascending-duration", action="store_true", help="Sort the tests by duration.")
     args = parser.parse_args()
@@ -138,11 +154,17 @@ if __name__ == '__main__':
     
     env = obtain_env_vars()
     
+    if parser.passing_tests and parser.failed_tests:
+        print("Please specify either --passing-tests or --failed-tests.")
+        exit(1)
+    
     # Parse the .trx file
     test_results = parse_trx_result(args.trx_file)
     
     if args.passing_tests:
         print_passing_tests(test_results, args.ascending_duration, args.verbose)
+    elif args.failed_tests:
+        print_failed_tests(test_results, args.verbose)
     else:
         print_test_results(test_results)
         print_test_summary(test_results)
