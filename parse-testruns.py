@@ -95,7 +95,7 @@ def print_test_results(results):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument("trx-file", type=str, help="Parses .trx file and extracts test run information.")
+    parser.add_argument("trx_file", type=str, help="Parses .trx file and extracts test run information.")
     args = parser.parse_args()
     
     if not validate_volume_directory_exists():
@@ -105,9 +105,7 @@ if __name__ == '__main__':
     env = obtain_env_vars()
     
     # Parse the .trx file
-    test_results = parse_trx_result(args["trx-file"])
+    test_results = parse_trx_result(args.trx_file)
     print_test_results(test_results)
     print_test_summary(test_results)
-    
-    
     
