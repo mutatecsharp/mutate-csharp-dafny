@@ -100,7 +100,7 @@ def print_passing_tests(results: list, sort_by_duration: bool, verbose: bool):
             print(f"Duration: {result['duration']}")
             print('-' * 40)
         
-        duration = sum([result['duration'] for result in passed_results])
+        duration = sum((result['duration'] for result in passed_results), datetime.timedelta())
         print(f"Passed tests total duration: {duration}")
     else:
         for result in passed_results:
