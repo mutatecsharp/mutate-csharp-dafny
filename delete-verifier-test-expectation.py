@@ -67,8 +67,8 @@ def delete_lines_in_file(file_path):
         if modified_line != line:
             print(f"-{line.strip()}")
             
-            # Also remove the previous empty line if current line is the last line
-            if modified_lines and line_number + 1 == len(lines) and modified_lines[-1].strip() == '':
+            # Also remove the previous empty line
+            if modified_lines and modified_lines[-1].strip() == '':
                 modified_lines.pop()
             
             continue
