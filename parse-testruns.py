@@ -151,6 +151,10 @@ if __name__ == '__main__':
     if not validate_volume_directory_exists():
         print('Volume directory not found. Please set VOLUME_ROOT environment variable.')
         exit(1)
+
+    if not os.path.exists(args.trx_file):
+        print(f"File {args.trx_file} not found.")
+        exit(1)
     
     env = obtain_env_vars()
     
