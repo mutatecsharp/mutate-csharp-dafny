@@ -154,7 +154,7 @@ if __name__ == '__main__':
     
     env = obtain_env_vars()
     
-    if parser.passing_tests and parser.failed_tests:
+    if args.passing_tests and args.failed_tests:
         print("Please specify either --passing-tests or --failed-tests.")
         exit(1)
     
