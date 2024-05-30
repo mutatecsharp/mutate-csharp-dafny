@@ -91,7 +91,7 @@ if __name__ == '__main__':
     mutated_file_count = get_mutated_file_count(args.registry_path)
     print(f"Found {mutated_file_count} mutated files.")
     
-    replace_with = f"      this.passthroughEnvironmentVariables = passthroughEnvironmentVariables.Concat(Enumerable.Range(1, {mutated_file_count}).Select(i => $\"MUTATE_CSHARP_ACTIVATED_MUTANT{{i}}\")).ToArray();"
+    replace_with = f"      this.passthroughEnvironmentVariables = passthroughEnvironmentVariables.Append(\"MUTATE_CSHARP_TRACER_FILEPATH\").ToArray();"
     print("The new line to be inserted is:")
     print(replace_with)
     
