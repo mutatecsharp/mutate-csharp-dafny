@@ -2,25 +2,30 @@
 
 set -uex
 
+DRY_RUN=""
 TRACE=false
 MAYBE_NO_BUILD_FLAG=""
 
 usage() {
     echo "Script to execute a specified Dafny integration test case."
-    echo "Usage: $0 [-e] [-n]"
+    echo "Usage: $0 [-e] [-n] [-d]"
     echo
     echo "Options:"
     echo "  -e           Target the traced Dafny version."
+    echo "  -d           Dry run. Test is not executed."
     echo "  -n           Do not build Dafny."
 }
 
-while getopts "enh" opt; do
+while getopts "enhd" opt; do
     case $opt in
         e)
             TRACE=true
             ;;
         n)
             MAYBE_NO_BUILD_FLAG="--no-build"
+            ;;
+        d)
+            DRY_RUN="--list-tests" # dry run: true
             ;;
         h)
             usage
@@ -55,9 +60,10 @@ pushd "$DAFNY_PROJECT_PATH"
 # Execute specified test
 dotnet test --no-restore "$MAYBE_NO_BUILD_FLAG" --nologo -c Release \
 --logger "console;verbosity=normal" \
---results-directory "$RESULTS_DIRECTORY" \  
+--results-directory "$RESULTS_DIRECTORY" \
 --settings "$SEQUENTIAL_RUNSETTINGS" \
 --filter "DisplayName~$TESTCASE" \
+$DRY_RUN \
 Source/IntegrationTests
 
 popd
