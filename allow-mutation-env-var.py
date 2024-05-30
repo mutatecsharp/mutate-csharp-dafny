@@ -68,6 +68,10 @@ if __name__ == '__main__':
         print('Volume directory not found. Please set VOLUME_ROOT environment variable.')
         exit(1)
         
+    if not args.registry_path:
+        print("Please provide the path to the registry file.")
+        exit(1)
+        
     env = obtain_env_vars()
         
     # Locate dafny path based on the experiment flag
