@@ -41,7 +41,7 @@ test -x "$MUTATE_CSHARP_PATH/artifacts/MutateCSharp/bin/Release/net8.0/MutateCSh
 ./overwrite-artifact-output.sh -e
 
 # Apply patch to whitelist mutate-csharp environment variable
-./allow-tracer-env-var.py --registry-path "$TRACED_DAFNY_ROOT/Source/DafnyCore/tracer-registry.mucs.json"
+./allow-tracer-env-var.py
 
 # trace dafny
 $MUTATE_CSHARP_PATH/artifacts/MutateCSharp/bin/Release/net8.0/MutateCSharp \
