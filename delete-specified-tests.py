@@ -56,7 +56,7 @@ def delete_test_files(integration_test_dir: str, tests_to_delete: list, dry_run:
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument("tests-to-delete", type=str, help="List of tests to delete, in text file.")
+    parser.add_argument("tests_to_delete", type=str, help="List of tests to delete, in text file.")
     parser.add_argument("-e", action='store_true', help="Experiment.")
     parser.add_argument("--dry-run", action='store_true', help="Dry run - displays which files are to be deleted.")
     args = parser.parse_args()

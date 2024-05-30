@@ -55,7 +55,7 @@ pushd "$DAFNY_PROJECT_PATH"
 # Execute specified test
 dotnet test --no-restore "$MAYBE_NO_BUILD_FLAG" --nologo -c Release \
 --logger "console;verbosity=normal" \
---results-directory "$RESULTS_DIRECTORY" \
+--results-directory "$RESULTS_DIRECTORY" \  
 --settings "$SEQUENTIAL_RUNSETTINGS" \
 --filter "DisplayName~$TESTCASE" \
 Source/IntegrationTests
