@@ -4,6 +4,7 @@ set -uex
 
 DRY_RUN=""
 MAYBE_NO_BUILD_FLAG=""
+EXPERIMENT=false
 
 usage() {
     echo "Script to mutate the Dafny compiler."
@@ -13,8 +14,11 @@ usage() {
     echo "  -n           Do not build Dafny."
 }
 
-while getopts "nhd" opt; do
+while getopts "enhd" opt; do
     case $opt in
+        e)
+            EXPERIMENT=true
+            ;;
         n)
             MAYBE_NO_BUILD_FLAG="--no-build"
             ;;
@@ -32,9 +36,14 @@ test -f env.sh && echo "mutate-csharp-dafny/env.sh found" || { echo "mutate-csha
 test -f parallel.runsettings && echo "mutate-csharp-dafny/parallel.runsettings found" || { echo "mutate-csharp-dafny/parallel.runsettings not found"; exit 1; }
 source env.sh
 
-# Locate dafny path
+# Locate dafny path based on the experiment flag
+if $EXPERIMENT; then
+    DAFNY_PROJECT_PATH="$TESTBENCH/dafny"
+else
+    DAFNY_PROJECT_PATH="$WORKSPACE/dafny"
+fi
+
 MUTATE_CSHARP_PATH="$WORKSPACE_MUTATE_CSHARP_ROOT"
-DAFNY_PROJECT_PATH="$WORKSPACE/dafny"
 
 test -d "$MUTATE_CSHARP_PATH"
 test -d "$DAFNY_PROJECT_PATH"
