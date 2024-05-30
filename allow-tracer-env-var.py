@@ -58,9 +58,8 @@ def replace_line(line_number: int, file_path: str, new_line: str):
     
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument("-e", action="store_true", help="Run on traced dafny.")
+    # parser.add_argument("-e", action="store_true", help="Run on traced dafny.")
     parser.add_argument("--dry-run", action="store_true", help="Dry run.")
-    parser.add_argument("--registry-path", type=str, help="Path to the registry file (.json).")
     
     args = parser.parse_args()
     
@@ -75,21 +74,17 @@ if __name__ == '__main__':
     env = obtain_env_vars()
         
     # Locate dafny path based on the experiment flag
-    if args.e:
-        print("Running on traced dafny codebase.")
-        dafny_path = env["TRACED_DAFNY_ROOT"]
-    else:
-        print("Running on mutated dafny codebase.")
-        dafny_path = env["MUTATED_DAFNY_ROOT"]
+    # if args.e:
+    print("Running on traced dafny codebase.")
+    dafny_path = env["TRACED_DAFNY_ROOT"]
+    # else:
+    #     print("Running on mutated dafny codebase.")
+    #     dafny_path = env["MUTATED_DAFNY_ROOT"]
         
     xunit_extension_dir = os.path.join(dafny_path, "Source", "XUnitExtensions", "Lit")
     if not os.path.exists(xunit_extension_dir):
         print("XUnitExtensions directory not found. Please check if dafny is cloned at the specified directory.")
         exit(1)
-    
-    # Get the number of mutated files
-    mutated_file_count = get_mutated_file_count(args.registry_path)
-    print(f"Found {mutated_file_count} mutated files.")
     
     replace_with = f"      this.passthroughEnvironmentVariables = passthroughEnvironmentVariables.Append(\"MUTATE_CSHARP_TRACER_FILEPATH\").ToArray();"
     print("The new line to be inserted is:")
