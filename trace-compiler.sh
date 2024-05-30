@@ -37,6 +37,12 @@ popd
 
 test -x "$MUTATE_CSHARP_PATH/artifacts/MutateCSharp/bin/Release/net8.0/MutateCSharp"
 
+# Apply patch to overwrite artifact output
+./overwrite-artifact-output.sh -e
+
+# Apply patch to whitelist mutate-csharp environment variable
+./allow-tracer-env-var.py --registry-path "$TRACED_DAFNY_ROOT/Source/DafnyCore/tracer-registry.mucs.json"
+
 # trace dafny
 $MUTATE_CSHARP_PATH/artifacts/MutateCSharp/bin/Release/net8.0/MutateCSharp \
 trace \
@@ -47,3 +53,5 @@ trace \
 --tracer-registry "$TRACED_DAFNY_ROOT/Source/DafnyCore/tracer-registry.mucs.json" \
 --testrun-settings "$(pwd)/basic.runsettings"
 
+# Delete compilation artifacts
+rm -rf "$TRACED_ARTIFACT_PATH/compilations"
