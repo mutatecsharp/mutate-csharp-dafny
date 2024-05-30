@@ -9,7 +9,7 @@
     See https://github.com/xunit/xunit/issues/2549.
     -->
     <NoAutoReporters>true</NoAutoReporters>
-    <StopOnFail>true</StopOnFail>
+    <!-- <StopOnFail>true</StopOnFail> -->
   </xUnit>
   <MaxCpuCount>0</MaxCpuCount>
   <LoggerRunSettings>

@@ -2,7 +2,7 @@
 
 set -uex
 
-EXPERIMENT=false
+TRACE=false
 MAYBE_NO_BUILD_FLAG=""
 
 usage() {
@@ -10,14 +10,14 @@ usage() {
     echo "Usage: $0 [-e] [-n]"
     echo
     echo "Options:"
-    echo "  -e           Target the clean Dafny version."
+    echo "  -e           Target the traced Dafny version."
     echo "  -n           Do not build Dafny."
 }
 
 while getopts "enh" opt; do
     case $opt in
         e)
-            EXPERIMENT=true
+            TRACE=true
             ;;
         n)
             MAYBE_NO_BUILD_FLAG="--no-build"
@@ -35,12 +35,12 @@ test -f env.sh && echo "mutate-csharp-dafny/env.sh found" || { echo "mutate-csha
 source env.sh
 
 # Locate dafny path based on the experiment flag
-if $EXPERIMENT; then
-    ARTIFACT_PATH="$EXPERIMENT_ARTIFACT_PATH"
-    DAFNY_PROJECT_PATH="$TESTBENCH/dafny"
+if $TRACE; then
+    ARTIFACT_PATH="$TRACED_ARTIFACT_PATH"
+    DAFNY_PROJECT_PATH="$TRACED_DAFNY_ROOT"
 else
-    ARTIFACT_PATH="$SUT_ARTIFACT_PATH"
-    DAFNY_PROJECT_PATH="$WORKSPACE/dafny"
+    ARTIFACT_PATH="$MUTATED_ARTIFACT_PATH"
+    DAFNY_PROJECT_PATH="$MUTATED_DAFNY_ROOT"
 fi
 
 # Set the results directory (todo: categorise based on files)

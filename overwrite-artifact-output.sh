@@ -11,12 +11,12 @@ usage() {
     exit 1
 }
 
-EXPERIMENT=false
+TRACED=false
 
 while getopts "eh" opt; do
     case $opt in
         e)
-            EXPERIMENT=true
+            TRACED=true
             ;;
         h)
             usage
@@ -26,12 +26,12 @@ done
 shift $((OPTIND-1))
 
 # Set the artifact path
-if $EXPERIMENT; then
-    COMPILED_ARTIFACT_PATH="$EXPERIMENT_ARTIFACT_PATH/compilations"
-    DAFNY_PROJECT_PATH="$TESTBENCH/dafny"
+if $TRACED; then
+    COMPILED_ARTIFACT_PATH="$TRACED_ARTIFACT_PATH/compilations"
+    DAFNY_PROJECT_PATH="$TRACED_DAFNY_ROOT"
 else
-    COMPILED_ARTIFACT_PATH="$SUT_ARTIFACT_PATH/compilations"
-    DAFNY_PROJECT_PATH="$WORKSPACE/dafny"
+    COMPILED_ARTIFACT_PATH="$MUTATED_ARTIFACT_PATH/compilations"
+    DAFNY_PROJECT_PATH="$MUTATED_DAFNY_ROOT"
 fi
 
 test -d "$DAFNY_PROJECT_PATH"

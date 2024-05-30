@@ -69,11 +69,11 @@ if __name__ == '__main__':
     
     # Locate dafny path based on the experiment flag
     if args.e:
-        print("Running on clean-slate dafny codebase.")
-        dafny_path = os.path.join(env["TESTBENCH"], "dafny")
+        print("Running on traced dafny codebase.")
+        dafny_path = env["TRACED_DAFNY_ROOT"]
     else:
         print("Running on mutated dafny codebase.")
-        dafny_path = os.path.join(env["WORKSPACE"], "dafny")
+        dafny_path = env["MUTATED_DAFNY_ROOT"]
         
     integration_test_path = os.path.join(dafny_path, "Source", "IntegrationTests", "TestFiles", "LitTests", "LitTest")
     

@@ -38,12 +38,13 @@ source env.sh
 
 # Locate dafny path based on the experiment flag
 if $EXPERIMENT; then
-    DAFNY_PROJECT_PATH="$TESTBENCH/dafny"
+    DAFNY_PROJECT_PATH="$TRACED_DAFNY_ROOT"
 else
-    DAFNY_PROJECT_PATH="$WORKSPACE/dafny"
+    DAFNY_PROJECT_PATH="$MUTATED_DAFNY_ROOT"
 fi
 
 MUTATE_CSHARP_PATH="$WORKSPACE_MUTATE_CSHARP_ROOT"
+
 
 test -d "$MUTATE_CSHARP_PATH"
 test -d "$DAFNY_PROJECT_PATH"

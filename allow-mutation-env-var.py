@@ -58,7 +58,7 @@ def replace_line(line_number: int, file_path: str, new_line: str):
     
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument("-e", action="store_true", help="Experiment.")
+    parser.add_argument("-e", action="store_true", help="Run on traced dafny.")
     parser.add_argument("--dry-run", action="store_true", help="Dry run.")
     parser.add_argument("--registry-path", type=str, help="Path to the registry file (.json).")
     
@@ -76,11 +76,11 @@ if __name__ == '__main__':
         
     # Locate dafny path based on the experiment flag
     if args.e:
-        print("Running on clean-slate dafny codebase.")
-        dafny_path = os.path.join(env["TESTBENCH"], "dafny")
+        print("Running on traced dafny codebase.")
+        dafny_path = env["TRACED_DAFNY_ROOT"]
     else:
         print("Running on mutated dafny codebase.")
-        dafny_path = os.path.join(env["WORKSPACE"], "dafny")
+        dafny_path = env["MUTATED_DAFNY_ROOT"]
         
     xunit_extension_dir = os.path.join(dafny_path, "Source", "XUnitExtensions", "Lit")
     if not os.path.exists(xunit_extension_dir):

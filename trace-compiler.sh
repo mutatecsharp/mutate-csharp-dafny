@@ -2,8 +2,6 @@
 
 set -uex
 
-DRY_RUN=""
-
 usage() {
     echo "Script to trace the Dafny compiler mutant execution."
 }
@@ -21,13 +19,16 @@ test -f env.sh && echo "mutate-csharp-dafny/env.sh found" || { echo "mutate-csha
 test -f parallel.runsettings && echo "mutate-csharp-dafny/parallel.runsettings found" || { echo "mutate-csharp-dafny/parallel.runsettings not found"; exit 1; }
 source env.sh
 
-# Locate dafny path
+# Locate dafny path based on the experiment flag
+
 MUTATE_CSHARP_PATH="$WORKSPACE_MUTATE_CSHARP_ROOT"
-DAFNY_PROJECT_PATH="$WORKSPACE/dafny"
+PASSING_TESTS_PATH="$MUTATE_DAFNY_RECORDS_ROOT/passing-tests.txt"
 
 test -d "$MUTATE_CSHARP_PATH"
-test -d "$DAFNY_PROJECT_PATH"
-test "$SUT_ARTIFACT_PATH"
+test -d "$MUTATED_DAFNY_ROOT"
+test -d "$TRACED_DAFNY_ROOT"
+test "$TRACED_ARTIFACT_PATH"
+test -f "$PASSING_TESTS_PATH"
 
 # Build mutate-csharp
 pushd $MUTATE_CSHARP_PATH
@@ -36,13 +37,13 @@ popd
 
 test -x "$MUTATE_CSHARP_PATH/artifacts/MutateCSharp/bin/Release/net8.0/MutateCSharp"
 
-# Mutate dafny
+# trace dafny
 $MUTATE_CSHARP_PATH/artifacts/MutateCSharp/bin/Release/net8.0/MutateCSharp \
 trace \
---test-project "$DAFNY_PROJECT_PATH/Source/IntegrationTests" \
---output-directory "$SUT_ARTIFACT_PATH/execution-trace" \
---tests-list "$DAFNY_PROJECT_PATH/all-tests.txt" \
---mutation-registry "$DAFNY_PROJECT_PATH/Source/DafnyCore/registry.mucs.json" \
---tracer-registry "$DAFNY_PROJECT_PATH/Source/DafnyCore/tracer-registry.mucs.json" \
+--test-project "$TRACED_DAFNY_ROOT/Source/IntegrationTests" \
+--output-directory "$TRACED_ARTIFACT_PATH/execution-trace" \
+--tests-list "$PASSING_TESTS_PATH" \
+--mutation-registry "$MUTATED_DAFNY_ROOT/Source/DafnyCore/registry.mucs.json" \
+--tracer-registry "$TRACED_DAFNY_ROOT/Source/DafnyCore/tracer-registry.mucs.json" \
 --testrun-settings "$(pwd)/basic.runsettings"
 

@@ -5,12 +5,12 @@ set -uex
 test -f env.sh && echo "mutate-csharp-dafny/env.sh found" || { echo "mutate-csharp-dafny/env.sh not found"; exit 1; }
 source env.sh
 
-EXPERIMENT=false
+TARGET_TRACER=false
 
 while getopts "eh" opt; do
     case $opt in
         e)
-            EXPERIMENT=true
+            TARGET_TRACER=true
             ;;
         h)
             usage
@@ -20,10 +20,10 @@ done
 shift $((OPTIND-1))
 
 # Locate dafny path based on the experiment flag
-if $EXPERIMENT; then
-    DAFNY_PROJECT_PATH="$TESTBENCH/dafny"
+if $TARGET_TRACER; then
+    DAFNY_PROJECT_PATH="$TRACED_DAFNY_ROOT"
 else
-    DAFNY_PROJECT_PATH="$WORKSPACE/dafny"
+    DAFNY_PROJECT_PATH="$MUTATED_DAFNY_ROOT"
 fi
 
 pushd "$DAFNY_PROJECT_PATH"

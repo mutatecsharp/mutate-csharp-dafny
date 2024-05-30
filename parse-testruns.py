@@ -2,35 +2,8 @@
 
 import os
 import datetime
-import shlex
 import argparse
-import subprocess
 import xml.etree.ElementTree as ET
-
-
-def validate_volume_directory_exists():
-    volume_dir = os.environ.get('VOLUME_ROOT')
-    return volume_dir and os.path.exists(volume_dir)
-
-
-def obtain_env_vars():
-    # Sanity check: we should be in mutate-csharp-dafny directory
-    if not os.path.exists('env.sh') or not os.path.exists('parallel.runsettings'):
-        print('Please run this script from the root of the mutate-csharp-dafny directory.')
-        exit(1)
-        
-    env_dict = {}
-        
-    # Source env.sh and print environment variables
-    command = shlex.split("bash -c 'source env.sh && env'")
-    proc = subprocess.Popen(command, stdout = subprocess.PIPE)
-    for line in proc.stdout:
-        decoded_line = line.decode('utf-8').strip()
-        (key, _, value) = decoded_line.partition("=")
-        env_dict[key] = value
-    proc.communicate()
-    
-    return env_dict
 
 
 def parse_trx_result(trx_path: str):
@@ -147,18 +120,12 @@ if __name__ == '__main__':
     parser.add_argument("--failed-tests", action="store_true", help="Print failed tests.")
     parser.add_argument("--verbose", action="store_true", help="Print verbose output.")
     parser.add_argument("--ascending-duration", action="store_true", help="Sort the tests by duration.")
-    args = parser.parse_args()
     
-    if not validate_volume_directory_exists():
-        print('Volume directory not found. Please set VOLUME_ROOT environment variable.')
-        exit(1)
-
+    args = parser.parse_args()
     if not os.path.exists(args.trx_file):
         print(f"File {args.trx_file} not found.")
         exit(1)
-    
-    env = obtain_env_vars()
-    
+
     if args.passing_tests and args.failed_tests:
         print("Please specify either --passing-tests or --failed-tests.")
         exit(1)

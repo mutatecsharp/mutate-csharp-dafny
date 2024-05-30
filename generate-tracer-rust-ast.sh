@@ -6,12 +6,12 @@ usage() {
     echo "Script to generate mutant execution tracer for the Dafny compiler."
 }
 
-EXPERIMENT=false
+TARGET_TRACER=false
 
-while getopts "h" opt; do
+while getopts "eh" opt; do
     case $opt in
         e)
-            EXPERIMENT=true
+            TARGET_TRACER=true
             ;;
         h)
             usage
@@ -27,10 +27,10 @@ source env.sh
 MUTATE_CSHARP_PATH="$WORKSPACE_MUTATE_CSHARP_ROOT"
 
 # Locate dafny path based on the experiment flag
-if $EXPERIMENT; then
-    DAFNY_PROJECT_PATH="$TESTBENCH/dafny"
+if $TARGET_TRACER; then
+    DAFNY_PROJECT_PATH="$TRACED_DAFNY_ROOT"
 else
-    DAFNY_PROJECT_PATH="$WORKSPACE/dafny"
+    DAFNY_PROJECT_PATH="$MUTATED_DAFNY_ROOT"
 fi
 
 test -d "$MUTATE_CSHARP_PATH"
