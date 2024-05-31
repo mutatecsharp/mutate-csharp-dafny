@@ -62,7 +62,7 @@ dotnet test --no-restore "$MAYBE_NO_BUILD_FLAG" --nologo -c Release \
 --logger "console;verbosity=normal" \
 --results-directory "$RESULTS_DIRECTORY" \
 --settings "$SEQUENTIAL_RUNSETTINGS" \
---filter "DisplayName~$TESTCASE" \
+--filter "DisplayName=$TESTCASE" \
 $DRY_RUN \
 Source/IntegrationTests
 
