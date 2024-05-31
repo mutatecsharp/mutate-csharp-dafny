@@ -15,6 +15,8 @@ while getopts "hd" opt; do
 done
 shift $((OPTIND-1))
 
+TESTCASE=$1
+
 test -f env.sh && echo "mutate-csharp-dafny/env.sh found" || { echo "mutate-csharp-dafny/env.sh not found"; exit 1; }
 test -f parallel.runsettings && echo "mutate-csharp-dafny/parallel.runsettings found" || { echo "mutate-csharp-dafny/parallel.runsettings not found"; exit 1; }
 source env.sh
@@ -48,7 +50,7 @@ $MUTATE_CSHARP_PATH/artifacts/MutateCSharp/bin/Release/net8.0/MutateCSharp \
 trace \
 --test-project "$TRACED_DAFNY_ROOT/Source/IntegrationTests" \
 --output-directory "$TRACED_ARTIFACT_PATH/single-execution-trace" \
---test-name "comp/ExternJavaString.dfy" \
+--test-name "$TESTCASE" \
 --mutation-registry "$MUTATED_DAFNY_ROOT/Source/DafnyCore/registry.mucs.json" \
 --tracer-registry "$TRACED_DAFNY_ROOT/Source/DafnyCore/tracer-registry.mucs.json" \
 --testrun-settings "$(pwd)/basic.runsettings"
