@@ -169,7 +169,7 @@ def execute_compiled_program(compiled_program_binary: Path,
     execute_binary_command = [str(compiled_program_binary)]
 
     start_time = time.time()
-    runtime_result = run_subprocess(execute_binary_command, timeout_in_seconds) # (exit_code, stdout, stderr, timeout)
+    runtime_result = run_subprocess(execute_binary_command, timeout_in_seconds)  # (exit_code, stdout, stderr, timeout)
     elapsed_time = time.time() - start_time
 
     if runtime_result.timeout:
@@ -218,7 +218,7 @@ def mutation_guided_test_generation(fuzz_d_binary: Path,
                                     mutation_testing_artifact_dir: Path,
                                     killed_mutants_artifact_dir: Path,
                                     mutation_registry: MutationRegistry,
-                                    source_file_under_test_relative_path: Path,
+                                    source_file_env_var: Path | None,
                                     test_campaign_budget_in_hours: int,
                                     generation_budget_in_seconds: int,
                                     compilation_timeout_in_seconds: int,
@@ -258,11 +258,11 @@ def mutation_guided_test_generation(fuzz_d_binary: Path,
                 test_campaign_budget_in_hours=test_campaign_budget_in_hours) and len(surviving_mutants) > 0:
             fuzz_d_fuzzer_seed = random.randint(0, LONG_UPPER_BOUND)
             program_uid = f"fuzzd-{fuzz_d_fuzzer_seed}"
-            current_mutation_testing_dir = mutation_testing_artifact_dir / program_uid
-            current_mutation_testing_program_path = current_mutation_testing_dir / 'valid.dfy'
+            current_program_output_dir = mutation_testing_artifact_dir / program_uid
+            current_mutation_testing_program_path = current_program_output_dir / 'valid.dfy'
 
             # Sanity check: skip if another runner is working on the same seed
-            if current_mutation_testing_dir.exists():
+            if current_program_output_dir.exists():
                 print(f"Skipping: another runner is working on the same seed ({fuzz_d_fuzzer_seed}).")
                 continue
 
@@ -313,9 +313,9 @@ def mutation_guided_test_generation(fuzz_d_binary: Path,
                       "injection performs as expected.")
                 continue
 
-            # 5) Create directory to perform mutation testing, using seed number to deduplicate efforts.
+            # 5) Create directory for the generated program, using seed number to deduplicate efforts.
             try:
-                current_mutation_testing_dir.mkdir()
+                current_program_output_dir.mkdir()
             except FileExistsError:
                 print(f"Skipping: another runner is working on the same seed ({fuzz_d_fuzzer_seed}).")
                 continue
@@ -324,6 +324,7 @@ def mutation_guided_test_generation(fuzz_d_binary: Path,
 
             # 6) Load execution trace from disk.
             with open(mutant_trace_file_path, 'r') as mutant_trace_io:
+                # remove duplicates
                 mutants_covered_by_program = list(set([tuple(line.strip().split(':'))
                                                        for line in mutant_trace_io.readlines()]))
 
@@ -337,8 +338,8 @@ def mutation_guided_test_generation(fuzz_d_binary: Path,
             if source_file_under_test_env_var is not None:
                 mutants_covered_by_program = [(env_var, mutant_id) for (env_var, mutant_id) in
                                               mutants_covered_by_program if env_var == source_file_under_test_env_var]
-            mutants_covered_by_program = [(env_var, mutant_id) for (env_var, mutant_id) in mutants_covered_by_program
-                                          if (env_var, mutant_id) not in killed_mutants]
+            candidate_mutants_for_program = [(env_var, mutant_id) for (env_var, mutant_id) in mutants_covered_by_program
+                                             if (env_var, mutant_id) not in killed_mutants]
 
             print(
                 f"Number of mutants covered by generated program with seed {fuzz_d_fuzzer_seed}: {len(mutants_covered_by_program)}")
@@ -348,11 +349,12 @@ def mutation_guided_test_generation(fuzz_d_binary: Path,
             mutants_covered_by_program.sort()
 
             # 8) Perform mutation testing on the generated Dafny program with the mutated Dafny compiler.
-            mutants_skipped_by_program = []
+            mutants_skipped_by_program = [(env_var, mutant_id) for (env_var, mutant_id) in mutants_covered_by_program
+                                          if (env_var, mutant_id) in killed_mutants]
             mutants_killed_by_program = []
             mutants_covered_but_not_killed_by_program = []
 
-            for env_var, mutant_id in mutants_covered_by_program:
+            for env_var, mutant_id in candidate_mutants_for_program:
                 if not time_budget_exists(test_campaign_start_time_in_seconds=test_campaign_start_time,
                                           test_campaign_budget_in_hours=test_campaign_budget_in_hours) or \
                         len(surviving_mutants) == 0:
@@ -414,11 +416,50 @@ def mutation_guided_test_generation(fuzz_d_binary: Path,
                 try:
                     mutant_killed_dir.mkdir()
                     with open(str(mutant_killed_dir / "kill_info.json"), "w") as killed_file_io:
-                        json.dump({"killed_by_test": program_uid, "kill_status": kill_status.name}, killed_file_io)
+                        json.dump({"mutant": f"{env_var}:{mutant_id}",
+                                   "killed_by_test": program_uid,
+                                   "kill_status": kill_status.name}, killed_file_io, indent=4)
                 except FileExistsError:
                     print(f"Skipping: another runner determined this mutant ({env_var}:{mutant_id}) can be killed.")
                     continue
 
+            # 13) Complete testing current program against all surviving mutants.
+            all_mutants_considered_by_program = mutants_killed_by_program + \
+                                                mutants_covered_but_not_killed_by_program + \
+                                                mutants_skipped_by_program
+            all_mutants_considered_by_program.sort()  # there should not be duplicated mutants
+            early_termination = mutants_covered_by_program != all_mutants_considered_by_program
+
+            # 12) Persist test campaign summary/metadata.
+            mutants_killed_by_program.sort()
+            mutants_skipped_by_program.sort()
+            mutants_covered_but_not_killed_by_program.sort()
+
+            persisted_mutants_killed_by_program = \
+                [f"{env_var}:{mutant_id}" for env_var, mutant_id in mutants_killed_by_program]
+            persisted_mutants_covered_but_not_killed_by_program = \
+                [f"{env_var}:{mutant_id}" for env_var, mutant_id in mutants_covered_but_not_killed_by_program]
+            persisted_mutants_skipped_by_program = \
+                [f"{env_var}:{mutant_id}" for env_var, mutant_id in mutants_skipped_by_program]
+            persisted_mutants_covered_by_program = \
+                [f"{env_var}:{mutant_id}" for env_var, mutant_id in mutants_covered_by_program]
+
+            persisted_summary = {"early_termination": early_termination,
+                                 "killed_mutants": persisted_mutants_killed_by_program,
+                                 "skipped_mutants": persisted_mutants_skipped_by_program,
+                                 "survived_mutants": persisted_mutants_covered_but_not_killed_by_program,
+                                 "covered_mutants": persisted_mutants_covered_by_program}
+
+            with open(str(current_program_output_dir / "test-summary.json"), "w") as summary_file_io:
+                json.dump(persisted_summary, summary_file_io, indent=4)
+
+            # time budget should be running out here
+            if early_termination \
+                    and time_budget_exists(test_campaign_start_time_in_seconds=test_campaign_start_time,
+                                           test_campaign_budget_in_hours=test_campaign_budget_in_hours) \
+                    and len(surviving_mutants) > 0:
+                print(f"Unexpected program internal state. Terminating...")
+                exit(1)
 
 
 def main():
