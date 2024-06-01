@@ -23,13 +23,13 @@ TRACED_DAFNY_ROOT="$TRACED_ROOT/dafny"
 test -d "$WORKSPACE_MUTATE_CSHARP_ROOT"
 test -d "$MUTATED_DAFNY_ROOT"
 test -d "$TRACED_DAFNY_ROOT"
-test -d "$REGULAR_DAFNY_ROOT"
+#test -d "$REGULAR_DAFNY_ROOT" (todo: clone later)
 
 echo "mutate-dafny-records directory: $MUTATE_DAFNY_RECORDS_ROOT"
 echo "mutate-csharp directory: $WORKSPACE_MUTATE_CSHARP_ROOT"
 echo "mutated Dafny directory: $MUTATED_DAFNY_ROOT"
 echo "traced Dafny directory: $TRACED_DAFNY_ROOT"
-echo "regular Dafny directory: $REGULAR_DAFNY_ROOT"
+#echo "regular Dafny directory: $REGULAR_DAFNY_ROOT"
 
 export VOLUME_ROOT
 export WORKSPACE

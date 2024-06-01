@@ -205,7 +205,7 @@ def mutation_guided_test_generation(fuzz_d_binary: Path,
                                     mutated_dafny_binary: Path,
                                     traced_dafny_binary: Path,
                                     compilation_artifact_dir: Path,
-                                    mutation_testing_artifact_dir: Path,
+                                    tests_artifact_dir: Path,
                                     killed_mutants_artifact_dir: Path,
                                     mutation_test_results: MutationTestResult,
                                     source_file_env_var: Path | None,
@@ -266,7 +266,7 @@ def mutation_guided_test_generation(fuzz_d_binary: Path,
                 test_campaign_budget_in_hours=test_campaign_budget_in_hours) and len(surviving_mutants) > 0:
             fuzz_d_fuzzer_seed = random.randint(0, LONG_UPPER_BOUND)
             program_uid = f"fuzzd_{fuzz_d_fuzzer_seed}"  # note: seed can be negative?
-            current_program_output_dir = mutation_testing_artifact_dir / program_uid
+            current_program_output_dir = tests_artifact_dir / program_uid
             current_mutation_testing_program_path = current_program_output_dir / 'valid.dfy'
 
             # Sanity check: skip if another runner is working on the same seed
@@ -600,7 +600,8 @@ def main():
 
     # Create output directory if it does not exist
     compilation_artifact_dir = artifact_directory / "compilations"
-    mutation_testing_artifact_dir = artifact_directory / 'mutation_testing'
+    # todo: redirect to custom set output
+    tests_artifact_dir = artifact_directory / 'tests'
     killed_mutants_artifact_dir = artifact_directory / 'killed_mutants'
 
     print(f"fuzz-d project root: {fuzz_d_root}")
@@ -608,7 +609,7 @@ def main():
     print(f"mutated dafny project root: {mutated_dafny_dir}")
     print(f"traced dafny project root: {traced_dafny_dir}")
     print(f"compilation artifact output directory: {compilation_artifact_dir}")
-    print(f"mutation testing artifact output directory: {mutation_testing_artifact_dir}")
+    print(f"mutation testing artifact output directory: {tests_artifact_dir}")
     print(f"killed mutants artifact output directory: {killed_mutants_artifact_dir}")
 
     if source_file_env_var is not None:
@@ -619,7 +620,7 @@ def main():
         exit(0)
 
     compilation_artifact_dir.mkdir(parents=True, exist_ok=True)
-    mutation_testing_artifact_dir.mkdir(parents=True, exist_ok=True)
+    tests_artifact_dir.mkdir(parents=True, exist_ok=True)
     killed_mutants_artifact_dir.mkdir(parents=True, exist_ok=True)
 
     if args.seed is not None:
@@ -630,7 +631,7 @@ def main():
                                     mutated_dafny_binary=mutated_dafny_binary_path,
                                     traced_dafny_binary=traced_dafny_binary_path,
                                     compilation_artifact_dir=compilation_artifact_dir,
-                                    mutation_testing_artifact_dir=mutation_testing_artifact_dir,
+                                    mutation_testing_artifact_dir=tests_artifact_dir,
                                     killed_mutants_artifact_dir=killed_mutants_artifact_dir,
                                     mutation_test_results=mutation_test_results,
                                     source_file_env_var=source_file_env_var,
