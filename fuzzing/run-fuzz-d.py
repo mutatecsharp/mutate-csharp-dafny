@@ -78,13 +78,13 @@ def time_budget_exists(test_campaign_start_time_in_seconds: float,
     return elapsed_time_in_seconds < time_budget_in_seconds
 
 
-# todo verify if fuzz d can be executed like this(probably not)
 def execute_fuzz_d(fuzz_d_binary: Path,
                    output_directory: Path,
                    seed: int,
                    timeout_in_seconds: int) -> bool:
     # Generates a randomised Dafny program.
-    fuzz_command = [str(fuzz_d_binary), "fuzz", "--seed", str(seed), "--noRun", "--output", str(output_directory)]
+    fuzz_command = ["java", "-jar", str(fuzz_d_binary), "fuzz", "--seed", str(seed), "--noRun", "--output",
+                    str(output_directory)]
     (exit_code, _, _, timeout) = run_subprocess(fuzz_command, timeout_in_seconds)
 
     if timeout:
@@ -378,6 +378,7 @@ def mutation_guided_test_generation(fuzz_d_binary: Path,
                         len(surviving_mutants) == 0:
                     break
 
+                # Important to verify the corresponding check in C# has the same name.
                 mutant_killed_dir = killed_mutants_artifact_dir / f"{env_var}-{mutant_id}"
                 if mutant_killed_dir.exists():
                     surviving_mutants.remove((env_var, mutant_id))
