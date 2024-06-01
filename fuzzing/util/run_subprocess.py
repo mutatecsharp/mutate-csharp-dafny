@@ -4,7 +4,7 @@ import subprocess
 
 from collections import namedtuple
 
-ProcessExecutionResult = namedtuple('ProcessExecutionResult', ['returncode', 'stdout', 'stderr', 'timeout'])
+ProcessExecutionResult = namedtuple('ProcessExecutionResult', ['exit_code', 'stdout', 'stderr', 'timeout'])
 
 
 def run_subprocess(args, timeout_seconds, cwd=None, env=None) -> ProcessExecutionResult:
