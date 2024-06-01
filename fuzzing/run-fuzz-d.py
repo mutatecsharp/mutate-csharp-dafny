@@ -11,11 +11,12 @@ import subprocess
 
 from pathlib import Path
 from random import random
-from enum import Enum
 from datetime import timedelta
 
 from fuzzing.util.file_hash import compute_file_hash
+from fuzzing.util.mutant_status import MutantStatus
 from fuzzing.util.mutation_registry import MutationRegistry
+from fuzzing.util.mutation_test_result import MutationTestResult, MutationTestStatus
 from fuzzing.util.instrument_type import InstrumentType
 from fuzzing.util.run_subprocess import run_subprocess, ProcessExecutionResult
 
@@ -23,18 +24,6 @@ LONG_UPPER_BOUND = (1 << 64) - 1
 COMPILATION_TIMEOUT_SCALE_FACTOR = 3
 EXECUTION_TIMEOUT_SCALE_FACTOR = 3
 EXECUTION_TRACE_OUTPUT_ENV_VAR = "MUTATE_CSHARP_TRACER_FILEPATH"
-
-
-class KillStatus(Enum):
-    KILLED_COMPILER_CRASHED = 1
-    KILLED_COMPILER_TIMEOUT = 2
-    KILLED_COMPILER_MISSING_EXECUTABLE_OUTPUT = 3
-    KILLED_RUNTIME_TIMEOUT = 4
-    KILLED_RUNTIME_EXITCODE_DIFFER = 5
-    KILLED_RUNTIME_STDOUT_DIFFER = 6
-    KILLED_RUNTIME_STDERR_DIFFER = 7
-    SURVIVED_HASH_EQUIVALENT = 8
-    SURVIVED_HASH_DIFFER = 9
 
 
 def validate_volume_directory_exists():
@@ -62,10 +51,7 @@ def obtain_env_vars():
     return env_dict
 
 
-def validated_mutant_registry(mutation_registry_path: str, tracer_registry_path: str):
-    mutation_registry_path = Path(mutation_registry_path)
-    tracer_registry_path = Path(tracer_registry_path)
-
+def validated_mutant_registry(mutation_registry_path: Path, tracer_registry_path: Path):
     if mutation_registry_path.name != "registry.mucs.json" or tracer_registry_path.name != "tracer-registry.mucs.json":
         print("Invalid mutation/tracer registry path.")
         exit(1)
@@ -92,6 +78,7 @@ def time_budget_exists(test_campaign_start_time_in_seconds: float,
     return elapsed_time_in_seconds < time_budget_in_seconds
 
 
+# todo verify if fuzz d can be executed like this(probably not)
 def execute_fuzz_d(fuzz_d_binary: Path,
                    output_directory: Path,
                    seed: int,
@@ -144,7 +131,7 @@ def execute_mutated_dafny(dafny_binary: Path,
                           mutant_env_var: str,
                           mutant_id: str,
                           executable_output_path: Path,
-                          timeout_in_seconds: int) -> KillStatus | None:
+                          timeout_in_seconds: int) -> MutantStatus | None:
     # Compiles the program with the Dafny compiler and produces an executable artifact.
     compile_command = [str(dafny_binary), "build", "--no-verify", "--output", str(executable_output_path),
                        str(dafny_file_path)]
@@ -156,11 +143,11 @@ def execute_mutated_dafny(dafny_binary: Path,
     (exit_code, stdout, stderr, timeout) = run_subprocess(compile_command, timeout_in_seconds, env=env_dict)
 
     if timeout:
-        return KillStatus.KILLED_COMPILER_TIMEOUT
+        return MutantStatus.KILLED_COMPILER_TIMEOUT
     if exit_code != 0:
-        return KillStatus.KILLED_COMPILER_CRASHED
+        return MutantStatus.KILLED_COMPILER_CRASHED
     if not executable_output_path.is_file():
-        return KillStatus.KILLED_COMPILER_MISSING_EXECUTABLE_OUTPUT
+        return MutantStatus.KILLED_COMPILER_MISSING_EXECUTABLE_OUTPUT
 
     return None
 
@@ -187,30 +174,30 @@ def execute_compiled_program(compiled_program_binary: Path,
 def execute_mutated_compiled_program(compiled_program_binary: Path,
                                      default_program_binary: Path,
                                      default_execution_result: ProcessExecutionResult,
-                                     timeout_in_seconds: int) -> KillStatus:
+                                     timeout_in_seconds: int) -> MutantStatus:
     # Optimisation: skip execution if file hash is equivalent
     default_file_hash = compute_file_hash(default_program_binary)
     mutated_file_hash = compute_file_hash(compiled_program_binary)
     if default_file_hash == mutated_file_hash:
-        return KillStatus.SURVIVED_HASH_EQUIVALENT
+        return MutantStatus.SURVIVED_HASH_EQUIVALENT
 
     # Executes the binary resulting from Dafny compilation.
     execute_binary_command = [str(compiled_program_binary)]
     (exit_code, stdout, stderr, timeout) = run_subprocess(execute_binary_command, timeout_in_seconds)
 
     if timeout:
-        return KillStatus.KILLED_COMPILER_TIMEOUT
+        return MutantStatus.KILLED_COMPILER_TIMEOUT
 
     if exit_code != default_execution_result.exit_code:
-        return KillStatus.KILLED_RUNTIME_EXITCODE_DIFFER
+        return MutantStatus.KILLED_RUNTIME_EXITCODE_DIFFER
 
     if stdout != default_execution_result.stdout:
-        return KillStatus.KILLED_RUNTIME_STDERR_DIFFER
+        return MutantStatus.KILLED_RUNTIME_STDERR_DIFFER
 
     if stderr != default_execution_result.stderr:
-        return KillStatus.KILLED_RUNTIME_STDOUT_DIFFER
+        return MutantStatus.KILLED_RUNTIME_STDOUT_DIFFER
 
-    return KillStatus.SURVIVED_HASH_DIFFER
+    return MutantStatus.SURVIVED_HASH_DIFFER
 
 
 def mutation_guided_test_generation(fuzz_d_binary: Path,
@@ -220,7 +207,7 @@ def mutation_guided_test_generation(fuzz_d_binary: Path,
                                     compilation_artifact_dir: Path,
                                     mutation_testing_artifact_dir: Path,
                                     killed_mutants_artifact_dir: Path,
-                                    mutation_registry: MutationRegistry,
+                                    mutation_test_results: MutationTestResult,
                                     source_file_env_var: Path | None,
                                     test_campaign_budget_in_hours: int,
                                     generation_budget_in_seconds: int,
@@ -231,7 +218,22 @@ def mutation_guided_test_generation(fuzz_d_binary: Path,
     # Interesting mutants to generate tests against:
     # 1) Mutants that are not covered by any tests
     # 2) Mutants that are covered by at least one test but survive / passes all tests when activated
-    surviving_mutants: set = set()  # todo: update with candidates
+    uncovered_by_regression_tests_mutants = \
+        [tuple(mutant.split(':')) for mutant in
+         mutation_test_results.get_mutants_of_status(MutationTestStatus.Uncovered)]
+    covered_by_regression_tests_but_survived_mutants = \
+        [tuple(mutant.split(':')) for mutant in
+         mutation_test_results.get_mutants_of_status(MutationTestStatus.Survived)]
+
+    # Sanity checks: all input should conform to the expected behaviour
+    if not all(len(mutant_info) == 2 for mutant_info in uncovered_by_regression_tests_mutants) or \
+            not all(len(mutant_info) == 2 for mutant_info in covered_by_regression_tests_but_survived_mutants):
+        print("Corrupted mutation testing results found.")
+        exit(1)
+
+    # set of (file_env_var, mutant_id)
+    surviving_mutants: set = set(uncovered_by_regression_tests_mutants +
+                                 covered_by_regression_tests_but_survived_mutants)
 
     time_of_last_kill = time.time()  # in seconds since epoch
     test_campaign_start_time = time.time()  # in seconds since epoch
@@ -263,7 +265,7 @@ def mutation_guided_test_generation(fuzz_d_binary: Path,
                 test_campaign_start_time_in_seconds=test_campaign_start_time,
                 test_campaign_budget_in_hours=test_campaign_budget_in_hours) and len(surviving_mutants) > 0:
             fuzz_d_fuzzer_seed = random.randint(0, LONG_UPPER_BOUND)
-            program_uid = f"fuzzd_{fuzz_d_fuzzer_seed}" # note: seed can be negative?
+            program_uid = f"fuzzd_{fuzz_d_fuzzer_seed}"  # note: seed can be negative?
             current_program_output_dir = mutation_testing_artifact_dir / program_uid
             current_mutation_testing_program_path = current_program_output_dir / 'valid.dfy'
 
@@ -417,7 +419,8 @@ def mutation_guided_test_generation(fuzz_d_binary: Path,
                                                                                 EXECUTION_TIMEOUT_SCALE_FACTOR))
 
                 print(f"Finished processing mutant {env_var}:{mutant_id}. Kill result: {kill_status.name}")
-                if kill_status == KillStatus.SURVIVED_HASH_EQUIVALENT or kill_status == KillStatus.SURVIVED_HASH_DIFFER:
+                if kill_status == MutantStatus.SURVIVED_HASH_EQUIVALENT \
+                        or kill_status == MutantStatus.SURVIVED_HASH_DIFFER:
                     mutants_covered_but_not_killed_by_program.append((env_var, mutant_id))
                     continue
 
@@ -460,7 +463,8 @@ def mutation_guided_test_generation(fuzz_d_binary: Path,
             persisted_mutants_covered_by_program = \
                 [f"{env_var}:{mutant_id}" for env_var, mutant_id in mutants_covered_by_program]
 
-            persisted_summary = {"early_termination": early_termination,
+            persisted_summary = {"test_name": program_uid,
+                                 "early_termination": early_termination,
                                  "killed_mutants": persisted_mutants_killed_by_program,
                                  "skipped_mutants": persisted_mutants_skipped_by_program,
                                  "survived_mutants": persisted_mutants_covered_but_not_killed_by_program,
@@ -501,9 +505,11 @@ def main():
     parser.add_argument("--output_directory", type=str, required=True,
                         help='Path to the persisted/temporary interesting programs output directory.')
     parser.add_argument('--mutation_registry', type=str,
-                        help='Path to registry generated after mutating the Dafny codebase.')
-    parser.add_argument('--tracer_registry', type=str, required=True,
-                        help='Path to registry generated after instrumenting the Dafny codebase to trace mutant executions.')
+                        help='Path to registry generated after mutating the Dafny codebase (.json).')
+    parser.add_argument('--tracer_registry', type=str,
+                        help='Path to registry generated after instrumenting the Dafny codebase to trace mutant executions (.json).')
+    parser.add_argument('--mutation_test_result', type=str, required=True,
+                        help="Path to mutation testing result of the Dafny regression test suite (.json).")
     parser.add_argument('--source_file_relative_path', type=str,
                         help="Optional. If specified, only consider mutants for the specified file.")
     parser.add_argument('--compilation_timeout', default=30,
@@ -563,19 +569,23 @@ def main():
     if args.tracer_registry is not None:
         tracer_registry_path = Path(args.tracer_registry).resolve()
     else:
-        tracer_registry_path = Path(f"{env['TRACED_DAFNY_ROOT']}") / "Source" / "DafnyCore" / "tracer-registry.mucs.json"
+        tracer_registry_path = Path(
+            f"{env['TRACED_DAFNY_ROOT']}") / "Source" / "DafnyCore" / "tracer-registry.mucs.json"
 
-    mutation_registry: MutationRegistry = validated_mutant_registry(str(mutation_registry_path), str(tracer_registry_path))
+    mutation_registry: MutationRegistry = validated_mutant_registry(mutation_registry_path, tracer_registry_path)
+    mutation_test_results: MutationTestResult = MutationTestResult.reconstruct_from_disk(args.mutation_test_result)
 
     source_file_env_var = None
     if args.source_file_relative_path is not None:
-        to_find = [registry['EnvironmentVariable'] for path, registry in mutation_registry.file_relative_path_to_registry.items()
+        to_find = [registry['EnvironmentVariable'] for path, registry in
+                   mutation_registry.file_relative_path_to_registry.items()
                    if path == args.source_file_relative_path]
         if len(to_find) == 0:
             print("Cannot find the specified file in mutation registry.")
             exit(1)
         elif len(to_find) > 1:
-            print("Found more than one match for the specified file in mutation registry. Mutation registry may be corrupted.")
+            print(
+                "Found more than one match for the specified file in mutation registry. Mutation registry may be corrupted.")
             exit(1)
         source_file_env_var = to_find[0]
 
@@ -621,7 +631,7 @@ def main():
                                     compilation_artifact_dir=compilation_artifact_dir,
                                     mutation_testing_artifact_dir=mutation_testing_artifact_dir,
                                     killed_mutants_artifact_dir=killed_mutants_artifact_dir,
-                                    mutation_registry=mutation_registry,
+                                    mutation_test_results=mutation_test_results,
                                     source_file_env_var=source_file_env_var,
                                     test_campaign_budget_in_hours=args.test_campaign_timeout,
                                     generation_budget_in_seconds=args.generation_timeout,
