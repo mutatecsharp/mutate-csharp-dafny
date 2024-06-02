@@ -55,14 +55,13 @@ test -x "$MUTATE_CSHARP_PATH/artifacts/MutateCSharp/bin/Release/net8.0/MutateCSh
 $MUTATE_CSHARP_PATH/artifacts/MutateCSharp/bin/Release/net8.0/MutateCSharp \
 test \
 --test-project "$INTEGRATION_TEST_PATH/IntegrationTests.csproj" \
---source-file-under-test "$MUTATED_DAFNY_ROOT/Source/DafnyCore/Backends/SinglePassCodeGenerator.cs" \
+--source-file-under-test "$MUTATED_DAFNY_ROOT/Source/DafnyCore/Backends/Dafny/DafnyCodeGenerator.cs" \
 --project "$MUTATED_DAFNY_ROOT/Source/DafnyCore/DafnyCore.csproj" \
 --passing-tests "$MUTATE_DAFNY_RECORDS_ROOT/passing-tests.txt" \
 --mutation-registry "$MUTATED_DAFNY_ROOT/Source/DafnyCore/registry.mucs.json" \
 --tracer-registry "$TRACED_DAFNY_ROOT/Source/DafnyCore/tracer-registry.mucs.json" \
 --mutant-traces "$TRACED_ARTIFACT_PATH/execution-trace" \
 --testrun-settings "$(pwd)/basic.runsettings" \
---compilation-artifact-directory "$MUTATED_ARTIFACT_PATH/compilations" \
 --test-output "$VOLUME_ROOT/output/tests" \
 --killed-mutants-output "$VOLUME_ROOT/output/killed_mutants"
 "$DRY_RUN"
