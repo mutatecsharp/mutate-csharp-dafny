@@ -61,6 +61,7 @@ test \
 --mutation-registry "$MUTATED_DAFNY_ROOT/Source/DafnyCore/registry.mucs.json" \
 --tracer-registry "$TRACED_DAFNY_ROOT/Source/DafnyCore/tracer-registry.mucs.json" \
 --mutant-traces "$TRACED_ARTIFACT_PATH/execution-trace" \
+--compilation-artifact-directory "$MUTATED_ARTIFACT_PATH/compilations" \
 --testrun-settings "$(pwd)/basic.runsettings" \
 --test-output "$VOLUME_ROOT/output/tests" \
 --killed-mutants-output "$VOLUME_ROOT/output/killed_mutants" \
