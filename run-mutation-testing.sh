@@ -63,5 +63,5 @@ test \
 --mutant-traces "$TRACED_ARTIFACT_PATH/execution-trace" \
 --testrun-settings "$(pwd)/basic.runsettings" \
 --test-output "$VOLUME_ROOT/output/tests" \
---killed-mutants-output "$VOLUME_ROOT/output/killed_mutants"
+--killed-mutants-output "$VOLUME_ROOT/output/killed_mutants" \
 "$DRY_RUN"
