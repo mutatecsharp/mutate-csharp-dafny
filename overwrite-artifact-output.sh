@@ -41,7 +41,7 @@ FILE_TO_PATCH="$DAFNY_PROJECT_PATH/Source/TestDafny/MultiBackendTest.cs"
 
 echo "Output test compilations to: $COMPILED_ARTIFACT_PATH"
 
-LINE_NUMBER=349
+LINE_NUMBER=350
 NEW_LINE_CONTENT="    var tempOutputDirectory = Path.Combine(\"$COMPILED_ARTIFACT_PATH\", randomDirName, randomName, randomName);"
 
 # Modify the line in the temporary file in-place
