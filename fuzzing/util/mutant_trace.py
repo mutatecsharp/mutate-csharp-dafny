@@ -1,4 +1,4 @@
-import regression_tests
+from regression_tests import get_valid_test_file_name
 
 from pathlib import Path
 from typing import List, Dict, Set, Tuple
@@ -41,7 +41,7 @@ class RegressionTestsMutantTraces:
         execution_traces_of_tests: Dict[str, Set[Tuple[str, str]]] = dict()
 
         for test_name in test_cases:
-            test_trace_path = trace_dir / regression_tests.get_valid_test_file_name(test_name)
+            test_trace_path = trace_dir / get_valid_test_file_name(test_name)
 
             if not test_trace_path.exists():
                 continue
