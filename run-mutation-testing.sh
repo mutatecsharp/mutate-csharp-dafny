@@ -55,7 +55,7 @@ test -x "$MUTATE_CSHARP_PATH/artifacts/MutateCSharp/bin/Release/net8.0/MutateCSh
 $MUTATE_CSHARP_PATH/artifacts/MutateCSharp/bin/Release/net8.0/MutateCSharp \
 test \
 --test-project "$INTEGRATION_TEST_PATH/IntegrationTests.csproj" \
---source-file-under-test "$MUTATED_DAFNY_ROOT/Source/DafnyCore/Backends/Dafny/DafnyCodeGenerator.cs" \
+--source-file-under-test "$MUTATED_DAFNY_ROOT/Source/DafnyCore/Backends/SinglePassCodeGenerator.cs" \
 --project "$MUTATED_DAFNY_ROOT/Source/DafnyCore/DafnyCore.csproj" \
 --passing-tests "$MUTATE_DAFNY_RECORDS_ROOT/passing-tests.txt" \
 --mutation-registry "$MUTATED_DAFNY_ROOT/Source/DafnyCore/registry.mucs.json" \
