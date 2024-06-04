@@ -1,5 +1,5 @@
 #! /usr/bin/env python3.11
-import dataclasses
+
 import json
 import os
 import time
@@ -18,7 +18,6 @@ from itertools import chain
 
 from fuzzing.dafny import DafnyBackend, RegularDafnyCompileResult, RegularDafnyBackendExecutionResult, \
     MutatedDafnyCompileResult, MutatedDafnyBackendExecutionResult
-from fuzzing.util.file_hash import compute_file_hash
 from fuzzing.util.program_status import MutantStatus, RegularProgramStatus
 from fuzzing.util.mutation_registry import MutationRegistry
 from fuzzing.util.mutation_test_result import MutationTestResult, MutationTestStatus
@@ -211,7 +210,7 @@ def mutation_guided_test_generation(fuzz_d_reliant_java_binary: Path,  # Java 19
             for destination in copy_destinations:
                 shutil.copytree(src=fuzz_d_generation_dir, dst=destination)
 
-            # 2) Compile the generated Dafny program with the default Dafny compiler to selected target backends
+            # 3) Compile the generated Dafny program with the default Dafny compiler to selected target backends
             regular_compilation_results = {
                 target:
                     target.regular_compile_to_backend(dafny_binary=default_dafny_binary,
@@ -245,14 +244,14 @@ def mutation_guided_test_generation(fuzz_d_reliant_java_binary: Path,  # Java 19
                     print(f"Program with seed {fuzz_d_fuzzer_seed} was independently found to identify "
                           f"faults in the Dafny compiler.")
 
-            # 3) Differential testing: compilation of regular Dafny
+            # 4) Differential testing: compilation of regular Dafny
             if any(result.program_status == RegularProgramStatus.COMPILER_ERROR for _, result in
                    regular_compilation_results.items()):
                 persist_failed_program(RegularProgramStatus.COMPILER_ERROR, regular_compilation_results,
                                        regular_compilation_error_dir / program_uid)
                 continue
 
-            # 3) Execute the generated Dafny program with the executable artifact produced by the default Dafny compiler
+            # 5) Execute the generated Dafny program with the executable artifact produced by the default Dafny compiler
             regular_execution_results = {
                 target:
                     target.regular_execution(backend_artifact_dir=default_compilation_dir,
@@ -261,14 +260,14 @@ def mutation_guided_test_generation(fuzz_d_reliant_java_binary: Path,  # Java 19
                 for target, results in regular_compilation_results.items()
             }
 
-            # Sanity check for non-zero runtime error code
+            # 6) Sanity check for non-zero runtime error code
             if any(result.program_status == RegularProgramStatus.RUNTIME_EXITCODE_NON_ZERO for result in
                    regular_execution_results.values()):
                 persist_failed_program(RegularProgramStatus.RUNTIME_EXITCODE_NON_ZERO, regular_execution_results,
                                        regular_wrong_code_dir / program_uid)
                 continue
 
-            # 4) Differential testing: execution of regular Dafny
+            # 7) Differential testing: execution of regular Dafny
             if any(result.execution_result.timeout for target, result in regular_execution_results.items()):
                 persist_failed_program(RegularProgramStatus.RUNTIME_TIMEOUT, regular_execution_results,
                                        regular_wrong_code_dir / program_uid)
@@ -289,7 +288,7 @@ def mutation_guided_test_generation(fuzz_d_reliant_java_binary: Path,  # Java 19
                                        regular_wrong_code_dir / program_uid)
                 continue
 
-            # 4) Compile the generated Dafny program with the trace-instrumented Dafny compiler.
+            # 8) Compile the generated Dafny program with the trace-instrumented Dafny compiler.
             traced_compilation_results = [
                 (target,
                  execution_trace_output_dir / f"mutant-trace-{target.name}",
@@ -306,14 +305,14 @@ def mutation_guided_test_generation(fuzz_d_reliant_java_binary: Path,  # Java 19
                       "does not cover any mutants, or the tracer setup is invalid.")
                 continue
 
-            # 5) Create directory for the generated program, using seed number to deduplicate efforts.
+            # 9) Create directory for the generated program, using seed number to deduplicate efforts.
             try:
                 current_program_output_dir.mkdir()
             except FileExistsError:
                 print(f"Skipping: another runner is working on the same seed ({fuzz_d_fuzzer_seed}).")
                 continue
 
-            # 6) Load execution trace from disk.
+            # 10) Load execution trace from disk.
             mutant_execution_traces = [
                 (target,
                  MutantTrace.reconstruct_trace_from_disk(trace_path=trace_path,
@@ -325,7 +324,7 @@ def mutation_guided_test_generation(fuzz_d_reliant_java_binary: Path,  # Java 19
                 print(f"Skipping: execution trace is corrupted. (seed: {fuzz_d_fuzzer_seed}))")
                 continue
 
-            # 7) Merge all mutants of consideration traced from different target backends.
+            # 11) Merge all mutants of consideration traced from different target backends.
             # (Deduplicate mutants with set)
             mutants_covered_by_program = chain.from_iterable(traces for _, traces in mutant_execution_traces)
             mutants_covered_by_program = list(set(mutants_covered_by_program))
@@ -335,14 +334,14 @@ def mutation_guided_test_generation(fuzz_d_reliant_java_binary: Path,  # Java 19
             # group.
             mutants_covered_by_program.sort()
 
-            # 8) Discard killed mutants from consideration.
+            # 12) Discard killed mutants from consideration.
             candidate_mutants_for_program = [(env_var, mutant_id) for (env_var, mutant_id) in mutants_covered_by_program
                                              if (env_var, mutant_id) not in killed_mutants]
 
             print(
                 f"Number of mutants covered by generated program with seed {fuzz_d_fuzzer_seed}: {len(mutants_covered_by_program)}")
 
-            # 8) Perform mutation testing on the generated Dafny program with the mutated Dafny compiler.
+            # 13) Perform mutation testing on the generated Dafny program with the mutated Dafny compiler.
             mutants_skipped_by_program = [(env_var, mutant_id) for (env_var, mutant_id) in mutants_covered_by_program
                                           if (env_var, mutant_id) in killed_mutants]
             mutants_killed_by_program = []
@@ -369,7 +368,7 @@ def mutation_guided_test_generation(fuzz_d_reliant_java_binary: Path,  # Java 19
                 empty_directory(mutated_compilation_dir)
                 shutil.copytree(src=fuzz_d_generation_dir, dst=mutated_compilation_dir)
 
-                # 9) Compile the generated Dafny program with the mutation-instrumented Dafny compiler.
+                # 14) Compile the generated Dafny program with the mutation-instrumented Dafny compiler.
                 mutated_compilation_results = {
                     target:
                         target.mutated_compile_to_backend(dafny_binary=mutated_dafny_binary,
@@ -383,7 +382,7 @@ def mutation_guided_test_generation(fuzz_d_reliant_java_binary: Path,  # Java 19
                     for target, regular_compile_result in regular_compilation_results.items()
                 }
 
-                # 10) Execute the generated Dafny program with the executable artifact produced by
+                # 15) Execute the generated Dafny program with the executable artifact produced by
                 # mutated Dafny compiler.
                 mutated_execution_results = dict()
                 if all(result.status == MutantStatus.SURVIVED for _, result in mutated_compilation_results):
@@ -407,7 +406,7 @@ def mutation_guided_test_generation(fuzz_d_reliant_java_binary: Path,  # Java 19
                     print(f"[INF] Finished processing mutant {env_var}:{mutant_id}. Kill result: SURVIVED")
                     continue
 
-                # 11) If we reached here, we found a test case to contribute to Dafny! Good work.
+                # 16) If we reached here, we found a test case to contribute to Dafny! Good work.
                 surviving_mutants.remove((env_var, mutant_id))
                 killed_mutants.add((env_var, mutant_id))
                 mutants_killed_by_program.append((env_var, mutant_id))
@@ -441,7 +440,7 @@ def mutation_guided_test_generation(fuzz_d_reliant_java_binary: Path,  # Java 19
                     except FileExistsError:
                         print(f"Skipping: another runner determined this mutant ({env_var}:{mutant_id}) as killed.")
 
-                # 12) Persist kill information to disk
+                # 17) Persist kill information to disk
                 if any(mutant_status == MutantStatus.KILLED_COMPILER_CRASHED for mutant_status in
                        mutant_error_statuses.values()):
                     persist_kill_info(overall_mutant_status=MutantStatus.KILLED_COMPILER_CRASHED,
@@ -468,14 +467,14 @@ def mutation_guided_test_generation(fuzz_d_reliant_java_binary: Path,  # Java 19
                                       result_dict=mutant_error_statuses,
                                       output_dir=mutant_killed_dir)
 
-            # 13) Complete testing current program against all surviving mutants.
+            # 18) Complete testing current program against all surviving mutants.
             all_mutants_considered_by_program = mutants_killed_by_program + \
                                                 mutants_covered_but_not_killed_by_program + \
                                                 mutants_skipped_by_program
             all_mutants_considered_by_program.sort()  # there should not be duplicated mutants
             early_termination = mutants_covered_by_program != all_mutants_considered_by_program
 
-            # 12) Persist test campaign summary/metadata.
+            # 19) Persist test campaign summary/metadata.
             mutants_killed_by_program.sort()
             mutants_skipped_by_program.sort()
             mutants_covered_but_not_killed_by_program.sort()
@@ -519,7 +518,7 @@ def main():
     parser.add_argument("--dry-run", action='store_true',
                         help="Perform dry run.")
     parser.add_argument('--seed', type=int,
-                        help='Optional. Seed for random number generator.')
+                        help='Optional. Seed for random number generator. Useful to reproduce results.')
     parser.add_argument("--fuzz_d", type=str,
                         help='Path to the fuzz-d project.')
     parser.add_argument("--dafny", type=str,
@@ -533,20 +532,22 @@ def main():
     parser.add_argument('--mutation_registry', type=str,
                         help='Path to registry generated after mutating the Dafny codebase (.json).')
     parser.add_argument('--tracer_registry', type=str,
-                        help='Path to registry generated after instrumenting the Dafny codebase to trace mutant executions (.json).')
+                        help='Path to registry generated after instrumenting the Dafny codebase to '
+                             'trace mutant executions (.json).')
     parser.add_argument('--mutation_test_result', type=str, required=True,
                         help="Path to mutation testing result of the Dafny regression test suite (.json).")
     parser.add_argument('--source_file_relative_path', type=str,
                         help="Optional. If specified, only consider mutants for the specified file.")
     parser.add_argument('--compilation_timeout', default=30,
-                        help='Maximum second(s) allowed to compile generated program with the non-mutated Dafny compiler.')
+                        help='Maximum second(s) allowed to compile generated program with the non-mutated '
+                             'Dafny compiler.')
     parser.add_argument('--generation_timeout', default=30,
                         help='Maximum second(s) allowed to generate program with fuzz-d.')
     parser.add_argument('--execution_timeout', default=30,
-                        help='Maximum second(s) allowed to execute fuzz-d generated program compiled by the non-mutated Dafny compiler.')
+                        help='Maximum second(s) allowed to execute fuzz-d generated program compiled by the '
+                             'non-mutated Dafny compiler.')
     parser.add_argument('--test_campaign_timeout', default=12,
                         help='Test campaign time budget in hour(s).')
-
     # CLI arguments
     args = parser.parse_args()
 
