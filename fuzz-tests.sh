@@ -37,8 +37,8 @@ test -f parallel.runsettings && echo "mutate-csharp-dafny/parallel.runsettings f
 source env.sh
 
 # Sanity check: fuzz-d submodule is cloned recursively
-test -f third_party/fuzz_d/run.py && echo "fuzz-d cloned" || { echo "fuzz-d not found"; exit 1; }
-test -f third_party/fuzz_d/app/src/main/antlr/dafny.g4 && echo "fuzz-d submodules cloned" || { echo "fuzz-d submodules not found"; exit 1; }
+test -f third_party/fuzz-d/run.py && echo "fuzz-d cloned" || { echo "fuzz-d not found"; exit 1; }
+test -f third_party/fuzz-d/app/src/main/antlr/dafny.g4 && echo "fuzz-d submodules cloned" || { echo "fuzz-d submodules not found"; exit 1; }
 
 MUTATE_CSHARP_PATH="$WORKSPACE_MUTATE_CSHARP_ROOT"
 
