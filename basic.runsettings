@@ -9,5 +9,6 @@
     See https://github.com/xunit/xunit/issues/2549.
     -->
     <NoAutoReporters>true</NoAutoReporters>
+    <MaxCpuCount>1</MaxCpuCount>
   </xUnit>
 </RunSettings>
