@@ -4,7 +4,7 @@ import time
 from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
-from typing import Optional
+from typing import Optional, List
 
 from util import constants
 from util.program_status import MutantStatus, RegularProgramStatus
@@ -51,14 +51,12 @@ class DafnyBackend(Enum):
                  identifier: int,
                  is_supported: bool,
                  target_flag: str,
-                 artifact_in_place: bool,
-                 execute_command: list):
+                 artifact_in_place: bool):
         self.identifier = identifier
         self._is_supported = is_supported
         self._target_flag = target_flag
         # translated source code file in downstream language, relative to the artifact path
         self._artifact_in_place = artifact_in_place
-        self._execute_command = execute_command
 
     @property
     def target_flag(self):
@@ -72,7 +70,7 @@ class DafnyBackend(Enum):
     def artifact_in_place(self):
         return self._artifact_in_place
 
-    def execute_command(self, artifact_dir: Path, file_name: str):
+    def get_execute_command(self, artifact_dir: Path, file_name: str) -> List[str]:
         if self is DafnyBackend.JAVA:
             return ["java", "-cp",
                     f"{str(artifact_dir / file_name)}-java:{str(artifact_dir / file_name)}-java/DafnyRuntime.jar",
@@ -140,7 +138,7 @@ class DafnyBackend(Enum):
                           dafny_file_name: str,  # no extensions
                           timeout_in_seconds: int | float) -> RegularDafnyBackendExecutionResult:
         # Executes the binary resulting from Dafny compilation.
-        execute_binary_command = self.execute_command(artifact_dir=backend_artifact_dir, file_name=dafny_file_name)
+        execute_binary_command = self.get_execute_command(artifact_dir=backend_artifact_dir, file_name=dafny_file_name)
 
         start_time = time.time()
         runtime_result = run_subprocess(execute_binary_command,
@@ -196,7 +194,7 @@ class DafnyBackend(Enum):
                          default_execution_result: ProcessExecutionResult,
                          timeout_in_seconds: int | float) -> MutatedDafnyBackendExecutionResult:
         # Executes the binary resulting from Dafny compilation.
-        execute_binary_command = self.execute_command(artifact_dir=dafny_file_dir, file_name=dafny_file_name)
+        execute_binary_command = self.get_execute_command(artifact_dir=dafny_file_dir, file_name=dafny_file_name)
 
         runtime_result = run_subprocess(execute_binary_command,
                                         timeout_in_seconds)  # (exit_code, stdout, stderr, timeout)
