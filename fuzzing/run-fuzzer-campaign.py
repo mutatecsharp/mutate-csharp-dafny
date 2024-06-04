@@ -13,15 +13,19 @@ import subprocess
 from pathlib import Path
 from random import random
 from datetime import timedelta
-from typing import List
+from typing import List, Dict
+from itertools import chain
 
-from fuzzing.dafny import DafnyBackend
+from fuzzing.dafny import DafnyBackend, RegularDafnyCompileResult, RegularDafnyBackendExecutionResult, \
+    MutatedDafnyCompileResult, MutatedDafnyBackendExecutionResult
 from fuzzing.util.file_hash import compute_file_hash
-from fuzzing.util.mutant_status import MutantStatus
+from fuzzing.util.program_status import MutantStatus, RegularProgramStatus
 from fuzzing.util.mutation_registry import MutationRegistry
 from fuzzing.util.mutation_test_result import MutationTestResult, MutationTestStatus
-from fuzzing.util.instrument_type import InstrumentType
+from fuzzing.util.mutant_trace import MutantTrace
 from fuzzing.util.run_subprocess import run_subprocess, ProcessExecutionResult
+from fuzzing.util.helper import all_equal, empty_directory
+from fuzzing.util import constants
 
 LONG_UPPER_BOUND = (1 << 64) - 1
 COMPILATION_TIMEOUT_SCALE_FACTOR = 3
@@ -95,41 +99,12 @@ def execute_fuzz_d(java_binary: Path,
     if timeout:
         print(f"Skipping: fuzz-d timeout (seed {seed}).")
 
-    generated_file_exists = (output_directory / "main.dfy").exists()
+    generated_file_exists = (output_directory / f"{constants.FUZZ_D_GENERATED_FILENAME}.dfy").exists()
 
     if not generated_file_exists:
-        print("Skipping: fuzz-d failed to generate main.dfy.")
+        print(f"Skipping: fuzz-d failed to generate {constants.FUZZ_D_GENERATED_FILENAME}.dfy.")
 
     return not timeout and exit_code == 0 and generated_file_exists
-
-
-def execute_mutated_compiled_program(compiled_program_binary: Path,
-                                     default_program_binary: Path,
-                                     default_execution_result: ProcessExecutionResult,
-                                     timeout_in_seconds: int) -> MutantStatus:
-    # Optimisation: skip execution if file hash is equivalent
-    default_file_hash = compute_file_hash(default_program_binary)
-    mutated_file_hash = compute_file_hash(compiled_program_binary)
-    if default_file_hash == mutated_file_hash:
-        return MutantStatus.SURVIVED_HASH_EQUIVALENT
-
-    # Executes the binary resulting from Dafny compilation.
-    execute_binary_command = [str(compiled_program_binary)]
-    (exit_code, stdout, stderr, timeout) = run_subprocess(execute_binary_command, timeout_in_seconds)
-
-    if timeout:
-        return MutantStatus.KILLED_COMPILER_TIMEOUT
-
-    if exit_code != default_execution_result.exit_code:
-        return MutantStatus.KILLED_RUNTIME_EXITCODE_DIFFER
-
-    if stdout != default_execution_result.stdout:
-        return MutantStatus.KILLED_RUNTIME_STDERR_DIFFER
-
-    if stderr != default_execution_result.stderr:
-        return MutantStatus.KILLED_RUNTIME_STDOUT_DIFFER
-
-    return MutantStatus.SURVIVED_HASH_DIFFER
 
 
 def mutation_guided_test_generation(fuzz_d_reliant_java_binary: Path,  # Java 19
@@ -190,13 +165,6 @@ def mutation_guided_test_generation(fuzz_d_reliant_java_binary: Path,  # Java 19
         traced_compilation_dir.mkdir()
         default_compilation_dir.mkdir()
 
-        # Initialise expected path
-        fuzz_d_output_path = fuzz_d_generation_dir / 'main.dfy'
-        default_compiled_executable_path = default_compilation_dir / 'default'
-        mutated_compiled_executable_path = mutated_compilation_dir / 'mutated'
-        traced_compiled_executable_path = traced_compilation_dir / 'traced'
-        mutant_trace_file_path = execution_trace_output_dir / 'mutant-trace'
-
         while time_budget_exists(
                 test_campaign_start_time_in_seconds=test_campaign_start_time,
                 test_campaign_budget_in_hours=test_campaign_budget_in_hours) and len(surviving_mutants) > 0:
@@ -209,17 +177,18 @@ def mutation_guided_test_generation(fuzz_d_reliant_java_binary: Path,  # Java 19
                 print(f"Skipping: another runner is working on the same seed ({fuzz_d_fuzzer_seed}).")
                 continue
 
-            # 0) Delete generated files from previous iteration.
-            if fuzz_d_output_path.exists():
-                fuzz_d_output_path.unlink()
-            if mutant_trace_file_path.exists():
-                mutant_trace_file_path.unlink()
-            if default_compiled_executable_path.exists():
-                default_compiled_executable_path.unlink()
-            if mutated_compiled_executable_path.exists():
-                mutated_compiled_executable_path.unlink()
-            if traced_compiled_executable_path.exists():
-                traced_compiled_executable_path.unlink()
+            # 0) Delete generated directories from previous iteration.
+            empty_directory(fuzz_d_generation_dir)
+            empty_directory(execution_trace_output_dir)
+            empty_directory(mutated_compilation_dir)
+            empty_directory(traced_compilation_dir)
+            empty_directory(default_compilation_dir)
+
+            fuzz_d_generation_dir.mkdir()
+            execution_trace_output_dir.mkdir()
+            mutated_compilation_dir.mkdir()
+            traced_compilation_dir.mkdir()
+            default_compilation_dir.mkdir()
 
             # 1) Generate a valid Dafny program
             if not execute_fuzz_d(fuzz_d_reliant_java_binary,
@@ -229,65 +198,112 @@ def mutation_guided_test_generation(fuzz_d_reliant_java_binary: Path,  # Java 19
                                   generation_budget_in_seconds):
                 continue
 
-            # 2) Compile the generated Dafny program with the default Dafny compiler to selected target backends
-            regular_compilation_results = [
-                (target,
-                target.regular_compile_to_backend(dafny_binary=default_dafny_binary,
-                                                  dafny_file_path=fuzz_d_output_path,
-                                                  artifact_output_dir=default_compiled_executable_path,
-                                                  artifact_name=f"regular-dafny-{target.name}",
-                                                  timeout_in_seconds=compilation_timeout_in_seconds))
-                for target in target_backends
-            ]
-
-            # 3) Differential testing: compilation of regular Dafny
-            if any(not result.success for _, result in regular_compilation_results):
-                # Copy fuzz-d generated program and Dafny compilation artifacts
-                with tempfile.TemporaryDirectory(dir=str(regular_compilation_error_dir),
-                                                 delete=False) as program_comp_error_dir:
-                    print(f"Found compilation errors during compilation of fuzz-d generated program with the *regular* "
-                          f"Dafny compiler. Results will be persisted to {program_comp_error_dir}.")
-                    shutil.copytree(src=str(fuzz_d_generation_dir), dst=f"{program_comp_error_dir}/fuzz_d_generation")
-                    shutil.copytree(src=str(default_compiled_executable_path),
-                                    dst=f"{program_comp_error_dir}/default_compilation")
-                    with open(f"{program_comp_error_dir}/error.log", "w") as error_io:
-                        json.dump(
-                            dict(
-                            compilation_error=[dataclasses.asdict(result) for _, result in regular_compilation_results]),
-                            error_io,
-                            indent=4
-                        )
-
+            # 2) Copy the fuzz-d generated Dafny program to other mode directories.
+            try:
+                current_program_output_dir.mkdir()
+            except FileExistsError:
+                print(f"Skipping: another runner is working on the same seed ({fuzz_d_fuzzer_seed}).")
                 continue
 
-            # 3) Execute the generated Dafny program with the executable artifact produced by the default Dafny compiler.
-           regular_execution_results = [
-                target.regular_execution(translated_src_path=results.)
-                for target, results in regular_compilation_results
-            ]
+            copy_destinations = [current_program_output_dir, mutated_compilation_dir, traced_compilation_dir,
+                                 default_compilation_dir]
 
-            default_execution_result, execution_elapsed_time = \
-                execute_compiled_program(compiled_program_binary=default_compiled_executable_path,
-                                         dafny_type=InstrumentType.DEFAULT,
-                                         timeout_in_seconds=execution_timeout_in_seconds)
-            if default_execution_result.timeout or default_execution_result.exit_code != 0:
+            for destination in copy_destinations:
+                shutil.copytree(src=fuzz_d_generation_dir, dst=destination)
+
+            # 2) Compile the generated Dafny program with the default Dafny compiler to selected target backends
+            regular_compilation_results = {
+                target:
+                    target.regular_compile_to_backend(dafny_binary=default_dafny_binary,
+                                                      dafny_file_dir=default_compilation_dir,
+                                                      dafny_file_name=constants.FUZZ_D_GENERATED_FILENAME,
+                                                      timeout_in_seconds=compilation_timeout_in_seconds)
+                for target in target_backends
+            }  # dict
+
+            def persist_failed_program(overall_status_code: RegularProgramStatus, result_list: Dict[
+                DafnyBackend, RegularDafnyCompileResult | RegularDafnyBackendExecutionResult], program_error_dir: Path):
+                # Copy fuzz-d generated program and Dafny compilation artifacts
+                try:
+                    program_error_dir.mkdir()
+                    print(f"[ERR] Error occurred with fuzz-d generated program and the *regular* "
+                          f"Dafny compiler. Results will be persisted to {program_error_dir}.")
+                    shutil.copytree(src=str(fuzz_d_generation_dir),
+                                    dst=f"{program_error_dir}/fuzz_d_generation")
+                    shutil.copytree(src=str(default_compilation_dir),
+                                    dst=f"{program_error_dir}/default_compilation")
+                    with open(f"{program_error_dir}/regular_error.json", "w") as regular_error_file:
+                        json.dump({"overall_status": overall_status_code.name,
+                                   "failed_target_backends": {
+                                       {"backend": backend.name, "program_status": result.program_status}
+                                       for backend, result in result_list.items() if
+                                       result.program_status != RegularProgramStatus.EXPECTED_SUCCESS}
+                                   },
+                                  regular_error_file, indent=4)
+
+                except FileExistsError:
+                    print(f"Program with seed {fuzz_d_fuzzer_seed} was independently found to identify "
+                          f"faults in the Dafny compiler.")
+
+            # 3) Differential testing: compilation of regular Dafny
+            if any(result.program_status == RegularProgramStatus.COMPILER_ERROR for _, result in
+                   regular_compilation_results.items()):
+                persist_failed_program(RegularProgramStatus.COMPILER_ERROR, regular_compilation_results,
+                                       regular_compilation_error_dir / program_uid)
+                continue
+
+            # 3) Execute the generated Dafny program with the executable artifact produced by the default Dafny compiler
+            regular_execution_results = {
+                target:
+                    target.regular_execution(backend_artifact_dir=default_compilation_dir,
+                                             dafny_file_name=constants.FUZZ_D_GENERATED_FILENAME,
+                                             timeout_in_seconds=execution_timeout_in_seconds)
+                for target, results in regular_compilation_results.items()
+            }
+
+            # Sanity check for non-zero runtime error code
+            if any(result.program_status == RegularProgramStatus.RUNTIME_EXITCODE_NON_ZERO for result in
+                   regular_execution_results.values()):
+                persist_failed_program(RegularProgramStatus.RUNTIME_EXITCODE_NON_ZERO, regular_execution_results,
+                                       regular_wrong_code_dir / program_uid)
+                continue
+
+            # 4) Differential testing: execution of regular Dafny
+            if any(result.execution_result.timeout for target, result in regular_execution_results.items()):
+                persist_failed_program(RegularProgramStatus.RUNTIME_TIMEOUT, regular_execution_results,
+                                       regular_wrong_code_dir / program_uid)
+                continue
+
+            if not all_equal(result.execution_result.exit_code for result in regular_execution_results.values()):
+                persist_failed_program(RegularProgramStatus.RUNTIME_EXITCODE_DIFFER, regular_execution_results,
+                                       regular_wrong_code_dir / program_uid)
+                continue
+
+            if not all_equal(result.execution_result.stdout for result in regular_execution_results.values()):
+                persist_failed_program(RegularProgramStatus.RUNTIME_STDOUT_DIFFER, regular_execution_results,
+                                       regular_wrong_code_dir / program_uid)
+                continue
+
+            if not all_equal(result.execution_result.stderr for result in regular_execution_results.values()):
+                persist_failed_program(RegularProgramStatus.RUNTIME_STDERR_DIFFER, regular_execution_results,
+                                       regular_wrong_code_dir / program_uid)
                 continue
 
             # 4) Compile the generated Dafny program with the trace-instrumented Dafny compiler.
-            env_dict = os.environ.copy()
-            env_dict[EXECUTION_TRACE_OUTPUT_ENV_VAR] = str(mutant_trace_file_path)
-            traced_compile_success, _ = \
-                execute_dafny(dafny_binary=traced_dafny_binary,
-                              dafny_file_path=fuzz_d_output_path,
-                              executable_output_path=traced_compiled_executable_path,
-                              dafny_type=InstrumentType.TRACED,
-                              timeout_in_seconds=compilation_timeout_in_seconds)
-            if not traced_compile_success:
-                continue
-            if not mutant_trace_file_path.exists():
-                print("Skipping: either the generated program execution trace does not cover any mutants, "
-                      "or injection of trace output path environment variable failed. If this persists, check if the "
-                      "injection performs as expected.")
+            traced_compilation_results = [
+                (target,
+                 execution_trace_output_dir / f"mutant-trace-{target.name}",
+                 target.regular_compile_to_backend(dafny_binary=traced_dafny_binary,
+                                                   dafny_file_dir=traced_compilation_dir,
+                                                   dafny_file_name=constants.FUZZ_D_GENERATED_FILENAME,
+                                                   timeout_in_seconds=compilation_timeout_in_seconds,
+                                                   trace_output_path=execution_trace_output_dir / f"mutant-trace-{target.name}"))
+                for target in target_backends
+            ]
+
+            if all(not trace_path.exists() for _, trace_path, _ in traced_compilation_results):
+                print("Error collecting trace information. This could be either the generated program "
+                      "does not cover any mutants, or the tracer setup is invalid.")
                 continue
 
             # 5) Create directory for the generated program, using seed number to deduplicate efforts.
@@ -297,32 +313,34 @@ def mutation_guided_test_generation(fuzz_d_reliant_java_binary: Path,  # Java 19
                 print(f"Skipping: another runner is working on the same seed ({fuzz_d_fuzzer_seed}).")
                 continue
 
-            shutil.copyfile(src=fuzz_d_output_path, dst=current_mutation_testing_program_path)
-
             # 6) Load execution trace from disk.
-            with open(mutant_trace_file_path, 'r') as mutant_trace_io:
-                # remove duplicates
-                mutants_covered_by_program = list(set([tuple(line.strip().split(':'))
-                                                       for line in mutant_trace_io.readlines()]))
+            mutant_execution_traces = [
+                (target,
+                 MutantTrace.reconstruct_trace_from_disk(trace_path=trace_path,
+                                                         source_file_env_var=source_file_env_var))
+                for target, trace_path, _ in traced_compilation_results
+            ]
 
-            if not all(len(env_var_to_mutant_id) == 2 for env_var_to_mutant_id in mutants_covered_by_program):
+            if any(target_trace is None for _, target_trace in mutant_execution_traces):
                 print(f"Skipping: execution trace is corrupted. (seed: {fuzz_d_fuzzer_seed}))")
                 continue
 
-            # 7) Filter for particular source file under test if specified and discard killed mutants from consideration.
-            if source_file_env_var is not None:
-                mutants_covered_by_program = [(env_var, mutant_id) for (env_var, mutant_id) in
-                                              mutants_covered_by_program if env_var == source_file_env_var]
-            candidate_mutants_for_program = [(env_var, mutant_id) for (env_var, mutant_id) in mutants_covered_by_program
-                                             if (env_var, mutant_id) not in killed_mutants]
-
-            print(
-                f"Number of mutants covered by generated program with seed {fuzz_d_fuzzer_seed}: {len(mutants_covered_by_program)}")
+            # 7) Merge all mutants of consideration traced from different target backends.
+            # (Deduplicate mutants with set)
+            mutants_covered_by_program = chain.from_iterable(traces for _, traces in mutant_execution_traces)
+            mutants_covered_by_program = list(set(mutants_covered_by_program))
 
             # Sort mutants: since mutants that are sequential in ID are likely to belong in the same mutation group,
             # killing one mutant in the mutation group might lead to kills in the other mutants in the same mutation
             # group.
             mutants_covered_by_program.sort()
+
+            # 8) Discard killed mutants from consideration.
+            candidate_mutants_for_program = [(env_var, mutant_id) for (env_var, mutant_id) in mutants_covered_by_program
+                                             if (env_var, mutant_id) not in killed_mutants]
+
+            print(
+                f"Number of mutants covered by generated program with seed {fuzz_d_fuzzer_seed}: {len(mutants_covered_by_program)}")
 
             # 8) Perform mutation testing on the generated Dafny program with the mutated Dafny compiler.
             mutants_skipped_by_program = [(env_var, mutant_id) for (env_var, mutant_id) in mutants_covered_by_program
@@ -342,45 +360,51 @@ def mutation_guided_test_generation(fuzz_d_reliant_java_binary: Path,  # Java 19
                     surviving_mutants.remove((env_var, mutant_id))
                     killed_mutants.add((env_var, mutant_id))
                     mutants_skipped_by_program.append((env_var, mutant_id))
-                    print(f"Skipping: mutant {env_var}:{mutant_id} was killed by another runner.")
+                    print(f"Skipping: mutant {env_var}:{mutant_id} was killed by another runner or a regression test.")
 
-                print(f"Surviving mutants: {len(surviving_mutants)} | Killed mutants: {len(killed_mutants)}")
+                print(
+                    f"[ANNOUNCEMENT] Surviving mutants: {len(surviving_mutants)} | Killed mutants: {len(killed_mutants)}")
                 print(f"Processing mutant {env_var}:{mutant_id} with program generated by seed {fuzz_d_fuzzer_seed}.")
 
-                try:
-                    if mutated_compiled_executable_path.is_file():
-                        mutated_compiled_executable_path.unlink()
-                except PermissionError:
-                    print(f"Permission denied: cannot delete mutated binary at {str(mutated_compiled_executable_path)}")
+                empty_directory(mutated_compilation_dir)
+                shutil.copytree(src=fuzz_d_generation_dir, dst=mutated_compilation_dir)
 
                 # 9) Compile the generated Dafny program with the mutation-instrumented Dafny compiler.
-                maybe_kill_status = \
-                    execute_mutated_dafny(dafny_binary=mutated_dafny_binary,
-                                          dafny_file_path=fuzz_d_output_path,
-                                          mutant_env_var=env_var,
-                                          mutant_id=mutant_id,
-                                          executable_output_path=mutated_compiled_executable_path,
-                                          timeout_in_seconds=max(compilation_timeout_in_seconds,
-                                                                 compile_elapsed_time *
-                                                                 COMPILATION_TIMEOUT_SCALE_FACTOR))
+                mutated_compilation_results = {
+                    target:
+                        target.mutated_compile_to_backend(dafny_binary=mutated_dafny_binary,
+                                                          dafny_file_dir=mutated_compilation_dir,
+                                                          dafny_file_name=constants.FUZZ_D_GENERATED_FILENAME,
+                                                          mutant_env_var=env_var,
+                                                          mutant_id=mutant_id,
+                                                          timeout_in_seconds=max(float(compilation_timeout_in_seconds),
+                                                                                 regular_compile_result.elapsed_time *
+                                                                                 COMPILATION_TIMEOUT_SCALE_FACTOR))
+                    for target, regular_compile_result in regular_compilation_results.items()
+                }
 
-                if maybe_kill_status is not None:
-                    kill_status = maybe_kill_status  # found a bug during compilation time
-                else:
-                    # try to find a bug during execution time
-                    # 10) Execute the generated Dafny program with the executable artifact produced by mutated Dafny compiler.
-                    kill_status = \
-                        execute_mutated_compiled_program(compiled_program_binary=mutated_compiled_executable_path,
-                                                         default_program_binary=default_compiled_executable_path,
-                                                         default_execution_result=default_execution_result,
-                                                         timeout_in_seconds=max(execution_timeout_in_seconds,
-                                                                                execution_elapsed_time *
-                                                                                EXECUTION_TIMEOUT_SCALE_FACTOR))
+                # 10) Execute the generated Dafny program with the executable artifact produced by
+                # mutated Dafny compiler.
+                mutated_execution_results = dict()
+                if all(result.status == MutantStatus.SURVIVED for _, result in mutated_compilation_results):
+                    mutated_execution_results = {
+                        target:
+                            target.mutant_execution(dafny_file_dir=mutated_compilation_dir,
+                                                    dafny_file_name=constants.FUZZ_D_GENERATED_FILENAME,
+                                                    default_execution_result=regular_execution_results[
+                                                        target].execution_result,
+                                                    timeout_in_seconds=max(float(execution_timeout_in_seconds),
+                                                                           regular_execution_results[
+                                                                               target].elapsed_time *
+                                                                           EXECUTION_TIMEOUT_SCALE_FACTOR))
+                        for target, result in mutated_compilation_results.items()
+                    }
 
-                print(f"Finished processing mutant {env_var}:{mutant_id}. Kill result: {kill_status.name}")
-                if kill_status == MutantStatus.SURVIVED_HASH_EQUIVALENT \
-                        or kill_status == MutantStatus.SURVIVED_HASH_DIFFER:
+                if len(mutated_execution_results) > 0 and \
+                        all(mutant_status == MutantStatus.SURVIVED for mutant_status in
+                            mutated_execution_results.values()):
                     mutants_covered_but_not_killed_by_program.append((env_var, mutant_id))
+                    print(f"[INF] Finished processing mutant {env_var}:{mutant_id}. Kill result: SURVIVED")
                     continue
 
                 # 11) If we reached here, we found a test case to contribute to Dafny! Good work.
@@ -389,17 +413,60 @@ def mutation_guided_test_generation(fuzz_d_reliant_java_binary: Path,  # Java 19
                 mutants_killed_by_program.append((env_var, mutant_id))
                 kill_elapsed_time = time.time() - time_of_last_kill
                 time_of_last_kill = time.time()
-                print(f"Killed mutants: {len(killed_mutants)} | Time taken since last kill: {str(kill_elapsed_time)}")
+                print(f"[SUCCESS] Mutant {env_var}:{mutant_id} killed | Killed mutants: {len(killed_mutants)} | "
+                      f"Time taken since last kill: {str(kill_elapsed_time)}")
 
-                try:
-                    mutant_killed_dir.mkdir()
-                    with open(str(mutant_killed_dir / "kill_info.json"), "w") as killed_file_io:
-                        json.dump({"mutant": f"{env_var}:{mutant_id}",
-                                   "killed_by_test": program_uid,
-                                   "kill_status": kill_status.name}, killed_file_io, indent=4)
-                except FileExistsError:
-                    print(f"Skipping: another runner determined this mutant ({env_var}:{mutant_id}) can be killed.")
-                    continue
+                # Merge the results between compilation and execution of program produced by mutated Dafny compiler.
+                mutant_error_statuses = {
+                    target: mutated_compilation_results[target].mutant_status
+                    if target not in mutated_execution_results else mutated_execution_results[target].mutant_status
+                    for target in target_backends
+                }
+
+                def persist_kill_info(overall_mutant_status: MutantStatus,
+                                      result_dict: Dict[DafnyBackend, MutantStatus], output_dir: Path):
+                    # Copy fuzz-d generated program and Dafny compilation artifacts
+                    try:
+                        output_dir.mkdir()
+                        print(
+                            f"[INF] Kill results for mutant {env_var}:{mutant_id} will be persisted to {str(output_dir / 'kill_info.json')}).")
+                        with open(str(output_dir / "kill_info.json"), "w") as killed_file_io:
+                            json.dump({"overall_status": overall_mutant_status.name,
+                                       "failed_target_backends": {
+                                           {"backend": backend.name, "mutant_status": mutant_status}
+                                           for backend, mutant_status in result_dict.items() if
+                                           mutant_status != MutantStatus.SURVIVED
+                                       }},
+                                      killed_file_io, indent=4)
+                    except FileExistsError:
+                        print(f"Skipping: another runner determined this mutant ({env_var}:{mutant_id}) as killed.")
+
+                # 12) Persist kill information to disk
+                if any(mutant_status == MutantStatus.KILLED_COMPILER_CRASHED for mutant_status in
+                       mutant_error_statuses.values()):
+                    persist_kill_info(overall_mutant_status=MutantStatus.KILLED_COMPILER_CRASHED,
+                                      result_dict=mutant_error_statuses,
+                                      output_dir=mutant_killed_dir)
+                elif any(mutant_status == MutantStatus.KILLED_COMPILER_TIMEOUT for mutant_status in
+                         mutant_error_statuses.values()):
+                    persist_kill_info(overall_mutant_status=MutantStatus.KILLED_COMPILER_TIMEOUT,
+                                      result_dict=mutant_error_statuses,
+                                      output_dir=mutant_killed_dir)
+                elif any(mutant_status == MutantStatus.KILLED_RUNTIME_EXITCODE_DIFFER for mutant_status in
+                         mutant_error_statuses.values()):
+                    persist_kill_info(overall_mutant_status=MutantStatus.KILLED_RUNTIME_EXITCODE_DIFFER,
+                                      result_dict=mutant_error_statuses,
+                                      output_dir=mutant_killed_dir)
+                elif any(mutant_status == MutantStatus.KILLED_RUNTIME_STDOUT_DIFFER for mutant_status in
+                         mutant_error_statuses.values()):
+                    persist_kill_info(overall_mutant_status=MutantStatus.KILLED_RUNTIME_STDOUT_DIFFER,
+                                      result_dict=mutant_error_statuses,
+                                      output_dir=mutant_killed_dir)
+                elif any(mutant_status == MutantStatus.KILLED_RUNTIME_STDERR_DIFFER for mutant_status in
+                         mutant_error_statuses.values()):
+                    persist_kill_info(overall_mutant_status=MutantStatus.KILLED_RUNTIME_STDERR_DIFFER,
+                                      result_dict=mutant_error_statuses,
+                                      output_dir=mutant_killed_dir)
 
             # 13) Complete testing current program against all surviving mutants.
             all_mutants_considered_by_program = mutants_killed_by_program + \

@@ -15,7 +15,6 @@ class MutationTestStatus(Enum):
 
 class MutationTestResult:
     def __init__(self, raw_json):
-        self.test_results_of_mutants = raw_json['MutantTestResultsOfTestCases']
         self.mutant_status = {mutant: MutationTestStatus[status] for mutant, status
                               in raw_json['MutantStatus'].items() if status != "None"}
 
