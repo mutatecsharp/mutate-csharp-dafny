@@ -31,6 +31,10 @@ echo "mutated Dafny directory: $MUTATED_DAFNY_ROOT"
 echo "traced Dafny directory: $TRACED_DAFNY_ROOT"
 #echo "regular Dafny directory: $REGULAR_DAFNY_ROOT"
 
+#test -f dependency_env.sh && echo "dependency_env.sh found" || { echo "mutate-csharp-dafny/dependency_env.sh not found"; exit 1; }
+#source dependency_env.sh
+
+# mutate-csharp setup paths
 export VOLUME_ROOT
 export WORKSPACE
 export TESTBENCH
@@ -41,3 +45,6 @@ export MUTATED_ARTIFACT_PATH
 export TRACED_ARTIFACT_PATH
 export WORKSPACE_MUTATE_CSHARP_ROOT
 export MUTATE_DAFNY_RECORDS_ROOT
+
+# upstream dependencies
+#export JAVA_19_BINARY_PATH
