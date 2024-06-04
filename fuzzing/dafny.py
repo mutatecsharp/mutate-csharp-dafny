@@ -43,9 +43,9 @@ class DafnyBackend(Enum):
     GO = (5, True, "go", False)
 
     # Not supported
-    CPP = (6, False, "cpp", "", None)
-    RUST = (7, False, "rs", "", None)
-    RESOLVED_DESUGARED_EXECUTABLE_DAFNY = (8, False, "dfy", None)
+    CPP = (6, False, "cpp", False)
+    RUST = (7, False, "rs", False)
+    RESOLVED_DESUGARED_EXECUTABLE_DAFNY = (8, False, "dfy", False)
 
     def __init__(self,
                  identifier: int,
