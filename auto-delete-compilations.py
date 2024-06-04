@@ -70,6 +70,8 @@ if __name__ == '__main__':
         exit(1)
 
     compilation_artifact_path = Path(env['MUTATED_ARTIFACT_PATH']) / "compilations"
+    if not compilation_artifact_path.exists():
+        compilation_artifact_path.mkdir(parents=True)
 
     event_handler = DirectoryWatcher(str(compilation_artifact_path), RETENTION_TIME)
     observer = Observer()
