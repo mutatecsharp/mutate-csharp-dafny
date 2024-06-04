@@ -1,7 +1,7 @@
+import regression_tests
+
 from pathlib import Path
 from typing import List, Dict, Set, Tuple
-from fuzzing.util import regression_tests
-
 
 class MutantTrace:
     @staticmethod

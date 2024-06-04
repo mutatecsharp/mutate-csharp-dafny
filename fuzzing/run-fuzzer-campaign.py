@@ -16,15 +16,15 @@ from datetime import timedelta
 from typing import List, Dict, Set, Tuple
 from itertools import chain
 
-from fuzzing.dafny import DafnyBackend, RegularDafnyCompileResult, RegularDafnyBackendExecutionResult, \
+from dafny import DafnyBackend, RegularDafnyCompileResult, RegularDafnyBackendExecutionResult, \
     MutatedDafnyCompileResult, MutatedDafnyBackendExecutionResult
-from fuzzing.util.program_status import MutantStatus, RegularProgramStatus
-from fuzzing.util.mutation_registry import MutationRegistry
-from fuzzing.util.mutation_test_result import MutationTestResult, MutationTestStatus
-from fuzzing.util.mutant_trace import MutantTrace, RegressionTestsMutantTraces
-from fuzzing.util.run_subprocess import run_subprocess, ProcessExecutionResult
-from fuzzing.util.helper import all_equal, empty_directory
-from fuzzing.util import constants, regression_tests
+from util.program_status import MutantStatus, RegularProgramStatus
+from util.mutation_registry import MutationRegistry
+from util.mutation_test_result import MutationTestResult, MutationTestStatus
+from util.mutant_trace import MutantTrace, RegressionTestsMutantTraces
+from util.run_subprocess import run_subprocess, ProcessExecutionResult
+from util.helper import all_equal, empty_directory
+from util import constants, regression_tests
 
 LONG_UPPER_BOUND = (1 << 64) - 1
 COMPILATION_TIMEOUT_SCALE_FACTOR = 3
