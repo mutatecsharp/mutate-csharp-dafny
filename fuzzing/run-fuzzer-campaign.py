@@ -15,6 +15,7 @@ from random import random
 from datetime import timedelta
 from typing import List, Dict, Set, Tuple
 from itertools import chain
+from loguru import logger
 
 from dafny import DafnyBackend, RegularDafnyCompileResult, RegularDafnyBackendExecutionResult, \
     MutatedDafnyCompileResult, MutatedDafnyBackendExecutionResult
@@ -40,7 +41,7 @@ def validate_volume_directory_exists():
 def obtain_env_vars():
     # Sanity check: we should be in mutate-csharp-dafny directory
     if not os.path.exists('env.sh') or not os.path.exists('parallel.runsettings'):
-        print('Please run this script from the root of the mutate-csharp-dafny directory.')
+        logger.error('Please run this script from the root of the mutate-csharp-dafny directory.')
         exit(1)
 
     env_dict = {}
@@ -59,16 +60,22 @@ def obtain_env_vars():
 
 def validated_mutant_registry(mutation_registry_path: Path, tracer_registry_path: Path):
     if mutation_registry_path.name != "registry.mucs.json" or tracer_registry_path.name != "tracer-registry.mucs.json":
-        print("Invalid mutation/tracer registry path.")
+        logger.error("Invalid mutation/tracer registry path.")
         exit(1)
 
     mutation_registry = MutationRegistry.reconstruct_from_disk(mutation_registry_path)
     tracer_registry = MutationRegistry.reconstruct_from_disk(tracer_registry_path)
-    print(f"Mutations found: {len(mutation_registry.file_relative_path_to_registry)}")
+    logger.info(f"Files mutated: {len(mutation_registry.file_relative_path_to_registry)}")
 
     # Sanity checks
     assert len(mutation_registry.file_relative_path_to_registry) == len(tracer_registry.file_relative_path_to_registry)
-    assert mutation_registry.file_relative_path_to_registry == tracer_registry.file_relative_path_to_registry
+    assert set(mutation_registry.file_relative_path_to_registry.keys()) == set(tracer_registry.file_relative_path_to_registry.keys())
+    assert set(mutation_registry.env_var_to_registry.keys()) == set(tracer_registry.env_var_to_registry.keys())
+    for file_env_var in mutation_registry.env_var_to_registry.keys():
+        assert len(mutation_registry.get_file_registry(file_env_var).mutations) == \
+            len(tracer_registry.get_file_registry(file_env_var).mutations)
+        for mutation in mutation_registry.get_file_registry(file_env_var).mutations.keys():
+            assert mutation in tracer_registry.get_file_registry(file_env_var).mutations
 
     return mutation_registry
 
@@ -79,7 +86,7 @@ def time_budget_exists(test_campaign_start_time_in_seconds: float,
     elapsed_time_in_seconds = int(time.time() - test_campaign_start_time_in_seconds)
 
     elapsed_timedelta = timedelta(seconds=elapsed_time_in_seconds)
-    print(f"Test campaign elapsed time: {str(elapsed_timedelta)}")
+    logger.info(f"Test campaign elapsed time: {str(elapsed_timedelta)}")
 
     return elapsed_time_in_seconds < time_budget_in_seconds
 
@@ -96,16 +103,16 @@ def execute_fuzz_d(java_binary: Path,
     (exit_code, _, _, timeout) = run_subprocess(fuzz_command, timeout_in_seconds)
 
     if timeout:
-        print(f"Skipping: fuzz-d timeout (seed {seed}).")
+        logger.warning(f"Skipping: fuzz-d timeout (seed {seed}).")
 
     generated_file_exists = (output_directory / f"{constants.FUZZ_D_GENERATED_FILENAME}.dfy").exists()
 
     if not generated_file_exists:
-        print(f"Skipping: fuzz-d failed to generate {constants.FUZZ_D_GENERATED_FILENAME}.dfy.")
+        logger.warning(f"Skipping: fuzz-d failed to generate {constants.FUZZ_D_GENERATED_FILENAME}.dfy.")
 
     return not timeout and exit_code == 0 and generated_file_exists
 
-
+@logger.catch
 def mutation_guided_test_generation(fuzz_d_reliant_java_binary: Path,  # Java 19
                                     fuzz_d_binary: Path,
                                     default_dafny_binary: Path,
@@ -157,13 +164,13 @@ def mutation_guided_test_generation(fuzz_d_reliant_java_binary: Path,  # Java 19
         covered_by_regression_tests_mutants = set(chain.from_iterable(regression_tests_mutant_traces.values()))
         uncovered_by_regression_tests_mutants = all_mutants.difference(covered_by_regression_tests_mutants)
     else:
-        print("Insufficient information to fuzz.")
+        logger.error("Insufficient information to fuzz.")
         exit(1)
 
     # Sanity checks: all input should conform to the expected behaviour
     if not all(len(mutant_info) == 2 for mutant_info in uncovered_by_regression_tests_mutants) or \
             not all(len(mutant_info) == 2 for mutant_info in covered_by_regression_tests_but_survived_mutants):
-        print("Corrupted mutation testing results found.")
+        logger.error("Corrupted mutation testing results found.")
         exit(1)
 
     # set of (file_env_var, mutant_id)
@@ -174,7 +181,7 @@ def mutation_guided_test_generation(fuzz_d_reliant_java_binary: Path,  # Java 19
     test_campaign_start_time = time.time()  # in seconds since epoch
 
     with (tempfile.TemporaryDirectory(dir=str(compilation_artifact_dir)) as temp_dir):
-        print(f"Temporary directory created at: {temp_dir}")
+        logger.info(f"Temporary directory created at: {temp_dir}")
 
         # Initialise temporary directories
         fuzz_d_generation_dir = Path(temp_dir) / 'fuzz_d_generation'
@@ -198,7 +205,7 @@ def mutation_guided_test_generation(fuzz_d_reliant_java_binary: Path,  # Java 19
 
             # Sanity check: skip if another runner is working on the same seed
             if current_program_output_dir.exists():
-                print(f"Skipping: another runner is working on the same seed ({fuzz_d_fuzzer_seed}).")
+                logger.info(f"Skipping: another runner is working on the same seed ({fuzz_d_fuzzer_seed}).")
                 continue
 
             # 0) Delete generated directories from previous iteration.
@@ -226,7 +233,7 @@ def mutation_guided_test_generation(fuzz_d_reliant_java_binary: Path,  # Java 19
             try:
                 current_program_output_dir.mkdir()
             except FileExistsError:
-                print(f"Skipping: another runner is working on the same seed ({fuzz_d_fuzzer_seed}).")
+                logger.info(f"Skipping: another runner is working on the same seed ({fuzz_d_fuzzer_seed}).")
                 continue
 
             copy_destinations = [current_program_output_dir, mutated_compilation_dir, traced_compilation_dir,
@@ -250,7 +257,7 @@ def mutation_guided_test_generation(fuzz_d_reliant_java_binary: Path,  # Java 19
                 # Copy fuzz-d generated program and Dafny compilation artifacts
                 try:
                     program_error_dir.mkdir()
-                    print(f"[ERR] Error occurred with fuzz-d generated program and the *regular* "
+                    logger.error(f"Error occurred with fuzz-d generated program and the *regular* "
                           f"Dafny compiler. Results will be persisted to {program_error_dir}.")
                     shutil.copytree(src=str(fuzz_d_generation_dir),
                                     dst=f"{program_error_dir}/fuzz_d_generation")
@@ -266,7 +273,7 @@ def mutation_guided_test_generation(fuzz_d_reliant_java_binary: Path,  # Java 19
                                   regular_error_file, indent=4)
 
                 except FileExistsError:
-                    print(f"Program with seed {fuzz_d_fuzzer_seed} was independently found to identify "
+                    logger.info(f"Program with seed {fuzz_d_fuzzer_seed} was independently found to identify "
                           f"faults in the Dafny compiler.")
 
             # 4) Differential testing: compilation of regular Dafny
@@ -326,7 +333,7 @@ def mutation_guided_test_generation(fuzz_d_reliant_java_binary: Path,  # Java 19
             ]
 
             if all(not trace_path.exists() for _, trace_path, _ in traced_compilation_results):
-                print("Error collecting trace information. This could be either the generated program "
+                logger.info("No trace information found. This could be either the generated program "
                       "does not cover any mutants, or the tracer setup is invalid.")
                 continue
 
@@ -334,7 +341,7 @@ def mutation_guided_test_generation(fuzz_d_reliant_java_binary: Path,  # Java 19
             try:
                 current_program_output_dir.mkdir()
             except FileExistsError:
-                print(f"Skipping: another runner is working on the same seed ({fuzz_d_fuzzer_seed}).")
+                logger.info(f"Skipping: another runner is working on the same seed ({fuzz_d_fuzzer_seed}).")
                 continue
 
             # 10) Load execution trace from disk.
@@ -346,7 +353,7 @@ def mutation_guided_test_generation(fuzz_d_reliant_java_binary: Path,  # Java 19
             ]
 
             if any(target_trace is None for _, target_trace in mutant_execution_traces):
-                print(f"Skipping: execution trace is corrupted. (seed: {fuzz_d_fuzzer_seed}))")
+                logger.error(f"Skipping: execution trace is corrupted. (seed: {fuzz_d_fuzzer_seed}))")
                 continue
 
             # 11) Merge all mutants of consideration traced from different target backends.
@@ -363,7 +370,7 @@ def mutation_guided_test_generation(fuzz_d_reliant_java_binary: Path,  # Java 19
             candidate_mutants_for_program = [(env_var, mutant_id) for (env_var, mutant_id) in mutants_covered_by_program
                                              if (env_var, mutant_id) not in killed_mutants]
 
-            print(
+            logger.info(
                 f"Number of mutants covered by generated program with seed {fuzz_d_fuzzer_seed}: {len(mutants_covered_by_program)}")
 
             # 13) Perform mutation testing on the generated Dafny program with the mutated Dafny compiler.
@@ -384,11 +391,11 @@ def mutation_guided_test_generation(fuzz_d_reliant_java_binary: Path,  # Java 19
                     surviving_mutants.remove((env_var, mutant_id))
                     killed_mutants.add((env_var, mutant_id))
                     mutants_skipped_by_program.append((env_var, mutant_id))
-                    print(f"Skipping: mutant {env_var}:{mutant_id} was killed by another runner or a regression test.")
+                    logger.info(f"Skipping: mutant {env_var}:{mutant_id} was killed by another runner or a regression test.")
 
-                print(
+                logger.info(
                     f"[ANNOUNCEMENT] Surviving mutants: {len(surviving_mutants)} | Killed mutants: {len(killed_mutants)}")
-                print(f"Processing mutant {env_var}:{mutant_id} with program generated by seed {fuzz_d_fuzzer_seed}.")
+                logger.info(f"Processing mutant {env_var}:{mutant_id} with program generated by seed {fuzz_d_fuzzer_seed}.")
 
                 empty_directory(mutated_compilation_dir)
                 shutil.copytree(src=fuzz_d_generation_dir, dst=mutated_compilation_dir)
@@ -428,7 +435,7 @@ def mutation_guided_test_generation(fuzz_d_reliant_java_binary: Path,  # Java 19
                         all(mutant_status == MutantStatus.SURVIVED for mutant_status in
                             mutated_execution_results.values()):
                     mutants_covered_but_not_killed_by_program.append((env_var, mutant_id))
-                    print(f"[INF] Finished processing mutant {env_var}:{mutant_id}. Kill result: SURVIVED")
+                    logger.info(f"Finished processing mutant {env_var}:{mutant_id}. Kill result: SURVIVED")
                     continue
 
                 # 16) If we reached here, we found a test case to contribute to Dafny! Good work.
@@ -437,7 +444,7 @@ def mutation_guided_test_generation(fuzz_d_reliant_java_binary: Path,  # Java 19
                 mutants_killed_by_program.append((env_var, mutant_id))
                 kill_elapsed_time = time.time() - time_of_last_kill
                 time_of_last_kill = time.time()
-                print(f"[SUCCESS] Mutant {env_var}:{mutant_id} killed | Killed mutants: {len(killed_mutants)} | "
+                logger.success(f"Mutant {env_var}:{mutant_id} killed | Killed mutants: {len(killed_mutants)} | "
                       f"Time taken since last kill: {str(kill_elapsed_time)}")
 
                 # Merge the results between compilation and execution of program produced by mutated Dafny compiler.
@@ -452,8 +459,8 @@ def mutation_guided_test_generation(fuzz_d_reliant_java_binary: Path,  # Java 19
                     # Copy fuzz-d generated program and Dafny compilation artifacts
                     try:
                         output_dir.mkdir()
-                        print(
-                            f"[INF] Kill results for mutant {env_var}:{mutant_id} will be persisted to {str(output_dir / 'kill_info.json')}).")
+                        logger.success(
+                            f"Kill results for mutant {env_var}:{mutant_id} will be persisted to {str(output_dir / 'kill_info.json')}).")
                         with open(str(output_dir / "kill_info.json"), "w") as killed_file_io:
                             json.dump({"overall_status": overall_mutant_status.name,
                                        "failed_target_backends": {
@@ -463,7 +470,7 @@ def mutation_guided_test_generation(fuzz_d_reliant_java_binary: Path,  # Java 19
                                        }},
                                       killed_file_io, indent=4)
                     except FileExistsError:
-                        print(f"Skipping: another runner determined this mutant ({env_var}:{mutant_id}) as killed.")
+                        logger.info(f"Skipping: another runner determined this mutant ({env_var}:{mutant_id}) as killed.")
 
                 # 17) Persist kill information to disk
                 if any(mutant_status == MutantStatus.KILLED_COMPILER_CRASHED for mutant_status in
@@ -528,13 +535,15 @@ def mutation_guided_test_generation(fuzz_d_reliant_java_binary: Path,  # Java 19
                     and time_budget_exists(test_campaign_start_time_in_seconds=test_campaign_start_time,
                                            test_campaign_budget_in_hours=test_campaign_budget_in_hours) \
                     and len(surviving_mutants) > 0:
-                print(f"Unexpected program internal state. Terminating...")
+                logger.error(f"Unexpected program internal state. Terminating...")
                 exit(1)
 
 
 def main():
+    logger.add("fuzzing_campaign_{time}.log")
+
     if not validate_volume_directory_exists():
-        print('Volume directory not found. Please set VOLUME_ROOT environment variable.')
+        logger.error('Volume directory not found. Please set VOLUME_ROOT environment variable.')
         exit(1)
 
     env = obtain_env_vars()
@@ -631,14 +640,14 @@ def main():
 
     source_file_env_var = None
     if args.source_file_relative_path is not None:
-        to_find = [registry['EnvironmentVariable'] for path, registry in
+        to_find = [registry.env_var for path, registry in
                    mutation_registry.file_relative_path_to_registry.items()
                    if path == args.source_file_relative_path]
         if len(to_find) == 0:
-            print("Cannot find the specified file in mutation registry.")
+            logger.error("Cannot find the specified file in mutation registry.")
             exit(1)
         elif len(to_find) > 1:
-            print(
+            logger.error(
                 "Found more than one match for the specified file in mutation registry. "
                 "Mutation registry may be corrupted.")
             exit(1)
@@ -648,6 +657,10 @@ def main():
         mutation_test_results: MutationTestResult | None = \
             MutationTestResult.reconstruct_from_disk(Path(args.mutation_test_result).absolute())
         regression_tests_mutant_traces = None
+        if mutation_test_results is None:
+            logger.error("Mutation analysis results not found or corrupted.")
+            exit(1)
+
     elif args.passing_tests is not None and args.regression_test_trace_dir is not None:
         # Retrieve execution trace *iff* mutation test results not available.
         # This is an optimisation to fuzz mutants not reachable by the regression test suite.
@@ -660,19 +673,29 @@ def main():
                 source_file_env_var=source_file_env_var
             )
         if regression_tests_mutant_traces is None:
-            print("Mutant trace of regression tests are corrupted.")
+            logger.error("Mutant trace of regression tests not found or corrupted.")
             exit(1)
     else:
-        print("Both regression test execution trace and mutation analysis not made available.")
+        logger.error("Both regression test execution trace and mutation analysis not made available.")
         exit(1)
 
     artifact_directory = Path(args.output_directory).absolute()
 
-    if not fuzz_d_binary_path.is_file() or \
-            not dafny_binary_path.is_file() or \
-            not mutated_dafny_binary_path.is_file() or \
-            not traced_dafny_binary_path.is_file():
-        print("Invalid fuzz-d or dafny binary executable paths.")
+    if not fuzz_d_binary_path.is_file():
+        logger.error("fuzz-d binary not found at {path}.", path=str(fuzz_d_binary_path))
+        exit(1)
+
+    if not dafny_binary_path.is_file():
+        logger.error("regular dafny binary not found at {path}.", path=str(dafny_binary_path))
+        exit(1)
+
+    if not mutated_dafny_binary_path.is_file():
+        logger.error("mutated dafny binary not found at {path}.", path=str(mutated_dafny_binary_path))
+        exit(1)
+
+    if not traced_dafny_binary_path.is_file():
+        logger.error("traced dafny binary not found at {path}.", path=str(traced_dafny_binary_path))
+        exit(1)
 
     # Create output directory if it does not exist
     compilation_artifact_dir = artifact_directory / "compilations"
@@ -682,21 +705,21 @@ def main():
     regular_wrong_code_dir = artifact_directory / 'regular-wrong-code'
     killed_mutants_artifact_dir = artifact_directory / 'killed_mutants'
 
-    print(f"fuzz-d project root: {fuzz_d_root}")
-    print(f"regular dafny project root: {regular_dafny_dir}")
-    print(f"mutated dafny project root: {mutated_dafny_dir}")
-    print(f"traced dafny project root: {traced_dafny_dir}")
-    print(f"compilation artifact output directory: {compilation_artifact_dir}")
-    print(f"mutation testing artifact output directory: {tests_artifact_dir}")
-    print(f"killed mutants artifact output directory: {killed_mutants_artifact_dir}")
-    print(f"regular compilation error output directory: {regular_compilation_error_dir}")
-    print(f"regular wrong code bug output directory: {regular_wrong_code_dir}")
+    logger.info(f"fuzz-d project root: {fuzz_d_root}")
+    logger.info(f"regular dafny project root: {regular_dafny_dir}")
+    logger.info(f"mutated dafny project root: {mutated_dafny_dir}")
+    logger.info(f"traced dafny project root: {traced_dafny_dir}")
+    logger.info(f"compilation artifact output directory: {compilation_artifact_dir}")
+    logger.info(f"mutation testing artifact output directory: {tests_artifact_dir}")
+    logger.info(f"killed mutants artifact output directory: {killed_mutants_artifact_dir}")
+    logger.info(f"regular compilation error output directory: {regular_compilation_error_dir}")
+    logger.info(f"regular wrong code bug output directory: {regular_wrong_code_dir}")
 
     if source_file_env_var is not None:
-        print(f"Specified file: {args.source_file_relative_path} | Env var: {source_file_env_var}")
+        logger.info(f"Specified file: {args.source_file_relative_path} | Env var: {source_file_env_var}")
 
     if args.dry_run:
-        print("Dry run complete.")
+        logger.info("Dry run complete.")
         exit(0)
 
     compilation_artifact_dir.mkdir(parents=True, exist_ok=True)

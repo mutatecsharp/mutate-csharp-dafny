@@ -12,7 +12,7 @@ usage() {
 }
 
 DRY_RUN=""
-ONLY_TEST_UNCOVERED=false
+ONLY_TEST_UNCOVERED=""
 
 while getopts "hdu" opt; do
     case $opt in
@@ -20,7 +20,7 @@ while getopts "hdu" opt; do
             DRY_RUN="--dry-run"
             ;;
         u)
-            ONLY_TEST_UNCOVERED=true
+            ONLY_TEST_UNCOVERED="true"
             ;;
         h)
             usage
@@ -33,7 +33,7 @@ done
 shift $((OPTIND-1))
 
 test -f env.sh && echo "mutate-csharp-dafny/env.sh found" || { echo "mutate-csharp-dafny/env.sh not found"; exit 1; }
-test -f parallel.runsettings && echo "mutate-csharp-dafny/parallel.runsettings found" || { echo "mutate-csharp-dafny/parallel.runsettings not found"; exit 1; }
+test -f basic.runsettings && echo "mutate-csharp-dafny/basic.runsettings found" || { echo "mutate-csharp-dafny/basic.runsettings not found"; exit 1; }
 source env.sh
 
 # Sanity check: fuzz-d submodule is cloned recursively
@@ -41,6 +41,7 @@ test -f third_party/fuzz-d/run.py && echo "fuzz-d cloned" || { echo "fuzz-d not 
 test -f third_party/fuzz-d/app/src/main/antlr/dafny.g4 && echo "fuzz-d submodules cloned" || { echo "fuzz-d submodules not found"; exit 1; }
 
 MUTATE_CSHARP_PATH="$WORKSPACE_MUTATE_CSHARP_ROOT"
+MUTATION_ANALYSIS_PATH="$MUTATED_DAFNY_ROOT/Source/IntegrationTests/mutation-testing.mucs.json"
 
 test -d "$MUTATE_CSHARP_PATH"
 
@@ -61,13 +62,22 @@ if [ -n "$DRY_RUN" ]; then
 fi
 
 # Run fuzzing campaign to catch bugs and generate tests that kill mutants.
+# Focus on SinglePassCodeGenerator.cs.
+SOURCE_FILE_UNDER_TEST="Backends/SinglePassCodeGenerator.cs"
+
 if [ $ONLY_TEST_UNCOVERED ]; then
-  $FUZZER_SCRIPT "DRY_RUN" \
+  echo "only fuzz mutants unreachable by regression test suite."
+  $FUZZER_SCRIPT "$DRY_RUN" \
+  --source_file_relative_path "$SOURCE_FILE_UNDER_TEST" \
   --passing_tests "$MUTATE_DAFNY_RECORDS_ROOT/passing-tests.txt" \
   --regression_test_trace_dir "$TRACED_ARTIFACT_PATH/execution-trace" \
   --output_directory "$FUZZER_OUTPUT_DIR"
 else
+  # Sanity check: repository mutation analysis recorded
+  test -f "$MUTATION_ANALYSIS_PATH"
+  echo "fuzz all survived mutants."
   $FUZZER_SCRIPT "$DRY_RUN" \
+  --source_file_relative_path "$SOURCE_FILE_UNDER_TEST" \
   --output_directory "$FUZZER_OUTPUT_DIR" \
-  --mutation_test_result "$INTEGRATION_TEST_PATH/mutation-testing.mucs.json"
+  --mutation_test_result "$MUTATION_ANALYSIS_PATH"
 fi

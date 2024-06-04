@@ -67,3 +67,6 @@ mutate --omit-redundant "$DRY_RUN" \
 "$DAFNY_PROJECT_PATH/Source/DafnyCore/Generic/Stringify.cs" \
 "$DAFNY_PROJECT_PATH/Source/DafnyCore/Generic/GenericErrors.cs" \
 "$DAFNY_PROJECT_PATH/Source/DafnyCore/AST/Grammar/SourcePreprocessor.cs"
+
+# Apply patch to whitelist mutate-csharp environment variable
+./allow-mutation-env-var.py --registry-path "$MUTATED_DAFNY_ROOT/Source/DafnyCore/registry.mucs.json"

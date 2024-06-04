@@ -1,4 +1,4 @@
-from regression_tests import get_valid_test_file_name
+from util.regression_tests import get_valid_test_file_name
 
 from pathlib import Path
 from typing import List, Dict, Set, Tuple

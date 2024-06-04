@@ -1,5 +1,5 @@
 from pathlib import Path
-from constants import INVALID_FILE_NAME_CHARACTERS
+from util.constants import INVALID_FILE_NAME_CHARACTERS
 
 
 def read_passing_tests(tests_list: Path):

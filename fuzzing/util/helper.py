@@ -3,6 +3,7 @@ import shutil
 
 from itertools import groupby
 from pathlib import Path
+from loguru import logger
 
 
 def all_equal(iterable):
@@ -20,4 +21,4 @@ def empty_directory(directory: Path):
             elif os.path.isdir(file_path):
                 shutil.rmtree(file_path)
         except Exception as e:
-            print(f"Failed to delete {file_path}. Reason: {e}")
+            logger.error(f"Failed to delete {file_path}. Reason: {e}")

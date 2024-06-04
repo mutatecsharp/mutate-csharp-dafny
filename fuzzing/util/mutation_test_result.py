@@ -2,6 +2,7 @@ import json
 
 from enum import Enum
 from pathlib import Path
+from loguru import logger
 
 
 class MutationTestStatus(Enum):
@@ -20,8 +21,8 @@ class MutationTestResult:
 
     @staticmethod
     def reconstruct_from_disk(path: Path):
-        if not path.exists() or not path.name.endswith('.json'):
-            print("Mutation test result does not exist.")
+        if not path.exists() or not path.name.endswith('mutation-testing.mucs.json'):
+            logger.error("Mutation test result does not exist.")
             exit(1)
 
         with path.open(mode='r') as f:

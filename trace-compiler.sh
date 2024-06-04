@@ -37,7 +37,7 @@ popd
 
 test -x "$MUTATE_CSHARP_PATH/artifacts/MutateCSharp/bin/Release/net8.0/MutateCSharp"
 
-# Apply patch to overwrite artifact output
+# Apply patch to overwrite artifact output
 ./overwrite-artifact-output.sh -e
 
 # Apply patch to whitelist mutate-csharp environment variable

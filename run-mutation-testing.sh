@@ -38,7 +38,7 @@ INTEGRATION_TEST_PATH="$MUTATED_DAFNY_ROOT/Source/IntegrationTests"
 
 test -d "$INTEGRATION_TEST_PATH"
 
-# Apply patch to overwrite artifact output
+# Apply patch to overwrite regression tests artifact output
 ./overwrite-artifact-output.sh
 
 # Apply patch to whitelist mutate-csharp environment variable

@@ -1,6 +1,7 @@
 import json
 
 from pathlib import Path
+from loguru import logger
 
 
 class FileMutationRegistry:
@@ -20,8 +21,8 @@ class MutationRegistry:
 
     @staticmethod
     def reconstruct_from_disk(path: Path):
-        if not path.exists() or not path.name.endswith('.json'):
-            print("Mutation registry does not exist.")
+        if not path.exists() or not path.name.endswith('registry.mucs.json'):
+            logger.error("Mutation registry does not exist.")
             exit(1)
 
         with path.open(mode='r') as f:

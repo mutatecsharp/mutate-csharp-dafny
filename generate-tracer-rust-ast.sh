@@ -31,9 +31,12 @@ pushd $MUTATE_CSHARP_PATH
 dotnet build -c Release MutateCSharp.sln
 popd
 
+# Apply patch to whitelist mutate-csharp environment variable
+./allow-tracer-env-var.py
+
 test -x "$MUTATE_CSHARP_PATH/artifacts/MutateCSharp/bin/Release/net8.0/MutateCSharp"
 
-# Mutate dafny
+# Instrument tracer
 $MUTATE_CSHARP_PATH/artifacts/MutateCSharp/bin/Release/net8.0/MutateCSharp \
 generate-tracer --omit-redundant \
 --project "$DAFNY_PROJECT_PATH/Source/DafnyCore/DafnyCore.csproj" \
