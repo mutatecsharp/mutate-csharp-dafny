@@ -1,4 +1,5 @@
 #! /usr/bin/env python3.11
+import dataclasses
 import json
 import os
 import time
@@ -12,7 +13,9 @@ import subprocess
 from pathlib import Path
 from random import random
 from datetime import timedelta
+from typing import List
 
+from fuzzing.dafny import DafnyBackend
 from fuzzing.util.file_hash import compute_file_hash
 from fuzzing.util.mutant_status import MutantStatus
 from fuzzing.util.mutation_registry import MutationRegistry
@@ -78,97 +81,26 @@ def time_budget_exists(test_campaign_start_time_in_seconds: float,
     return elapsed_time_in_seconds < time_budget_in_seconds
 
 
-def execute_fuzz_d(fuzz_d_binary: Path,
+def execute_fuzz_d(java_binary: Path,
+                   fuzz_d_binary: Path,
                    output_directory: Path,
                    seed: int,
                    timeout_in_seconds: int) -> bool:
     # Generates a randomised Dafny program.
-    fuzz_command = ["java", "-jar", str(fuzz_d_binary), "fuzz", "--seed", str(seed), "--noRun", "--output",
+    # (artifacts: fuzz-d.log, generated.dfy, (if passing) interpret_out.txt, (if passing) main.dfy)
+    fuzz_command = [str(java_binary), "-jar", str(fuzz_d_binary), "fuzz", "--seed", str(seed), "--noRun", "--output",
                     str(output_directory)]
     (exit_code, _, _, timeout) = run_subprocess(fuzz_command, timeout_in_seconds)
 
     if timeout:
         print(f"Skipping: fuzz-d timeout (seed {seed}).")
 
-    return not timeout and exit_code == 0
+    generated_file_exists = (output_directory / "main.dfy").exists()
 
+    if not generated_file_exists:
+        print("Skipping: fuzz-d failed to generate main.dfy.")
 
-def execute_dafny(dafny_binary: Path,
-                  dafny_file_path: Path,
-                  executable_output_path: Path,
-                  dafny_type: InstrumentType,
-                  timeout_in_seconds: int) -> (bool, float):
-    # Compiles the program with the Dafny compiler and produces an executable artifact.
-    compile_command = [str(dafny_binary), "build", "--no-verify", "--output", str(executable_output_path),
-                       str(dafny_file_path)]
-
-    start_time = time.time()
-    (exit_code, stdout, stderr, timeout) = run_subprocess(compile_command, timeout_in_seconds)
-    elapsed_time = time.time() - start_time
-
-    if exit_code != 0:
-        print(f"""Skipping: error while compiling fuzz-d generated program. ({dafny_type.name})
-        Standard output:
-        {stdout.decode('utf-8')}
-        Standard error:
-        {stderr.decode('utf-8')}
-        """)
-        return False, None
-
-    if timeout:
-        print(f"Skipping: timeout while compiling fuzz-d generated program. ({dafny_type.name})")
-        return False, None
-
-    if not executable_output_path.is_file():
-        print(f"Skipping: executable from dafny compilation not found. ({dafny_type.name})")
-        return False, None
-
-    return True, elapsed_time
-
-
-def execute_mutated_dafny(dafny_binary: Path,
-                          dafny_file_path: Path,
-                          mutant_env_var: str,
-                          mutant_id: str,
-                          executable_output_path: Path,
-                          timeout_in_seconds: int) -> MutantStatus | None:
-    # Compiles the program with the Dafny compiler and produces an executable artifact.
-    compile_command = [str(dafny_binary), "build", "--no-verify", "--output", str(executable_output_path),
-                       str(dafny_file_path)]
-
-    # Prepare environment variable to instrument mutation.
-    env_dict = os.environ.copy()
-    env_dict[mutant_env_var] = mutant_id
-
-    (exit_code, stdout, stderr, timeout) = run_subprocess(compile_command, timeout_in_seconds, env=env_dict)
-
-    if timeout:
-        return MutantStatus.KILLED_COMPILER_TIMEOUT
-    if exit_code != 0:
-        return MutantStatus.KILLED_COMPILER_CRASHED
-    if not executable_output_path.is_file():
-        return MutantStatus.KILLED_COMPILER_MISSING_EXECUTABLE_OUTPUT
-
-    return None
-
-
-def execute_compiled_program(compiled_program_binary: Path,
-                             dafny_type: InstrumentType,
-                             timeout_in_seconds: int) -> (ProcessExecutionResult, float):
-    # Executes the binary resulting from Dafny compilation.
-    execute_binary_command = [str(compiled_program_binary)]
-
-    start_time = time.time()
-    runtime_result = run_subprocess(execute_binary_command, timeout_in_seconds)  # (exit_code, stdout, stderr, timeout)
-    elapsed_time = time.time() - start_time
-
-    if runtime_result.timeout:
-        print(f"Skipping: timeout while running executable of generated program. ({dafny_type.name})")
-
-    if runtime_result.exit_code != 0:
-        print(f"Skipping: error while running executable of generated program. ({dafny_type.name})")
-
-    return runtime_result, elapsed_time
+    return not timeout and exit_code == 0 and generated_file_exists
 
 
 def execute_mutated_compiled_program(compiled_program_binary: Path,
@@ -200,13 +132,17 @@ def execute_mutated_compiled_program(compiled_program_binary: Path,
     return MutantStatus.SURVIVED_HASH_DIFFER
 
 
-def mutation_guided_test_generation(fuzz_d_binary: Path,
+def mutation_guided_test_generation(fuzz_d_reliant_java_binary: Path,  # Java 19
+                                    fuzz_d_binary: Path,
                                     default_dafny_binary: Path,
                                     mutated_dafny_binary: Path,
                                     traced_dafny_binary: Path,
+                                    target_backends: List[DafnyBackend],
                                     compilation_artifact_dir: Path,
                                     tests_artifact_dir: Path,
                                     killed_mutants_artifact_dir: Path,
+                                    regular_compilation_error_dir: Path,
+                                    regular_wrong_code_dir: Path,
                                     mutation_test_results: MutationTestResult,
                                     source_file_env_var: Path | None,
                                     test_campaign_budget_in_hours: int,
@@ -238,7 +174,7 @@ def mutation_guided_test_generation(fuzz_d_binary: Path,
     time_of_last_kill = time.time()  # in seconds since epoch
     test_campaign_start_time = time.time()  # in seconds since epoch
 
-    with tempfile.TemporaryDirectory(dir=str(compilation_artifact_dir)) as temp_dir:
+    with (tempfile.TemporaryDirectory(dir=str(compilation_artifact_dir)) as temp_dir):
         print(f"Temporary directory created at: {temp_dir}")
 
         # Initialise temporary directories
@@ -255,7 +191,7 @@ def mutation_guided_test_generation(fuzz_d_binary: Path,
         default_compilation_dir.mkdir()
 
         # Initialise expected path
-        fuzz_d_output_path = fuzz_d_generation_dir / 'generated.dfy'
+        fuzz_d_output_path = fuzz_d_generation_dir / 'main.dfy'
         default_compiled_executable_path = default_compilation_dir / 'default'
         mutated_compiled_executable_path = mutated_compilation_dir / 'mutated'
         traced_compiled_executable_path = traced_compilation_dir / 'traced'
@@ -267,7 +203,6 @@ def mutation_guided_test_generation(fuzz_d_binary: Path,
             fuzz_d_fuzzer_seed = random.randint(0, LONG_UPPER_BOUND)
             program_uid = f"fuzzd_{fuzz_d_fuzzer_seed}"  # note: seed can be negative?
             current_program_output_dir = tests_artifact_dir / program_uid
-            current_mutation_testing_program_path = current_program_output_dir / 'valid.dfy'
 
             # Sanity check: skip if another runner is working on the same seed
             if current_program_output_dir.exists():
@@ -287,27 +222,50 @@ def mutation_guided_test_generation(fuzz_d_binary: Path,
                 traced_compiled_executable_path.unlink()
 
             # 1) Generate a valid Dafny program
-            if not execute_fuzz_d(fuzz_d_binary,
+            if not execute_fuzz_d(fuzz_d_reliant_java_binary,
+                                  fuzz_d_binary,
                                   fuzz_d_generation_dir,
                                   fuzz_d_fuzzer_seed,
                                   generation_budget_in_seconds):
                 continue
 
-            if not fuzz_d_output_path.is_file():
-                print("Skipping: fuzz-d generated program not found. Check if setup is correct.")
-                continue
+            # 2) Compile the generated Dafny program with the default Dafny compiler to selected target backends
+            regular_compilation_results = [
+                (target,
+                target.regular_compile_to_backend(dafny_binary=default_dafny_binary,
+                                                  dafny_file_path=fuzz_d_output_path,
+                                                  artifact_output_dir=default_compiled_executable_path,
+                                                  artifact_name=f"regular-dafny-{target.name}",
+                                                  timeout_in_seconds=compilation_timeout_in_seconds))
+                for target in target_backends
+            ]
 
-            # 2) Compile the generated Dafny program with the default Dafny compiler
-            default_compile_success, compile_elapsed_time = \
-                execute_dafny(dafny_binary=default_dafny_binary,
-                              dafny_file_path=fuzz_d_output_path,
-                              executable_output_path=default_compiled_executable_path,
-                              dafny_type=InstrumentType.DEFAULT,
-                              timeout_in_seconds=compilation_timeout_in_seconds)
-            if not default_compile_success:
+            # 3) Differential testing: compilation of regular Dafny
+            if any(not result.success for _, result in regular_compilation_results):
+                # Copy fuzz-d generated program and Dafny compilation artifacts
+                with tempfile.TemporaryDirectory(dir=str(regular_compilation_error_dir),
+                                                 delete=False) as program_comp_error_dir:
+                    print(f"Found compilation errors during compilation of fuzz-d generated program with the *regular* "
+                          f"Dafny compiler. Results will be persisted to {program_comp_error_dir}.")
+                    shutil.copytree(src=str(fuzz_d_generation_dir), dst=f"{program_comp_error_dir}/fuzz_d_generation")
+                    shutil.copytree(src=str(default_compiled_executable_path),
+                                    dst=f"{program_comp_error_dir}/default_compilation")
+                    with open(f"{program_comp_error_dir}/error.log", "w") as error_io:
+                        json.dump(
+                            dict(
+                            compilation_error=[dataclasses.asdict(result) for _, result in regular_compilation_results]),
+                            error_io,
+                            indent=4
+                        )
+
                 continue
 
             # 3) Execute the generated Dafny program with the executable artifact produced by the default Dafny compiler.
+           regular_execution_results = [
+                target.regular_execution(translated_src_path=results.)
+                for target, results in regular_compilation_results
+            ]
+
             default_execution_result, execution_elapsed_time = \
                 execute_compiled_program(compiled_program_binary=default_compiled_executable_path,
                                          dafny_type=InstrumentType.DEFAULT,
@@ -531,20 +489,18 @@ def main():
     else:
         fuzz_d_root = Path(f"{os.getcwd()}/third_party/fuzz-d")
 
-    # Build fuzz-d
+    # Build fuzz-d (execution of fuzz-d relies on Java version 19)
+    java_binary_path = Path(env['JAVA_19_BINARY_PATH'])
     fuzz_d_binary_path = fuzz_d_root / "app" / "build" / "libs" / "app.jar"
     os.system(f"cd {fuzz_d_root} && ./gradlew build && cd -")
 
-    # Note: we use the provided script to execute Dafny as this is suggested in the Dafny README.
-    # (https://github.com/dafny-lang/dafny/wiki/INSTALL)
-    # The script is a simple wrapper around the Dafny executable that handles cross-OS nuances.
     # Regular dafny
     if args.dafny is not None:
         regular_dafny_dir = Path(args.dafny).resolve()
     else:
         regular_dafny_dir = Path(f"{env['REGULAR_DAFNY_ROOT']}")
 
-    dafny_binary_path = regular_dafny_dir / "Scripts" / "Dafny"
+    dafny_binary_path = regular_dafny_dir / "Binaries" / "Dafny.dll"
 
     # Mutated dafny
     if args.mutated_dafny is not None:
@@ -552,7 +508,7 @@ def main():
     else:
         mutated_dafny_dir = Path(f"{env['MUTATED_DAFNY_ROOT']}")
 
-    mutated_dafny_binary_path = mutated_dafny_dir / "Scripts" / "Dafny"
+    mutated_dafny_binary_path = mutated_dafny_dir / "Binaries" / "Dafny.dll"
 
     # Tracer dafny
     if args.traced_dafny is not None:
@@ -560,7 +516,7 @@ def main():
     else:
         traced_dafny_dir = Path(f"{env['TRACED_DAFNY_ROOT']}")
 
-    traced_dafny_binary_path = traced_dafny_dir / "Scripts" / "Dafny"
+    traced_dafny_binary_path = traced_dafny_dir / "Binaries" / "Dafny.dll"
 
     if args.mutation_registry is not None:
         mutation_registry_path = Path(args.mutation_registry).resolve()
@@ -600,8 +556,10 @@ def main():
 
     # Create output directory if it does not exist
     compilation_artifact_dir = artifact_directory / "compilations"
-    # todo: redirect to custom set output
+
     tests_artifact_dir = artifact_directory / 'tests'
+    regular_compilation_error_dir = artifact_directory / 'regular-compilation-errors'
+    regular_wrong_code_dir = artifact_directory / 'regular-wrong-code'
     killed_mutants_artifact_dir = artifact_directory / 'killed_mutants'
 
     print(f"fuzz-d project root: {fuzz_d_root}")
@@ -611,6 +569,8 @@ def main():
     print(f"compilation artifact output directory: {compilation_artifact_dir}")
     print(f"mutation testing artifact output directory: {tests_artifact_dir}")
     print(f"killed mutants artifact output directory: {killed_mutants_artifact_dir}")
+    print(f"regular compilation error output directory: {regular_compilation_error_dir}")
+    print(f"regular wrong code bug output directory: {regular_wrong_code_dir}")
 
     if source_file_env_var is not None:
         print(f"Specified file: {args.source_file_relative_path} | Env var: {source_file_env_var}")
@@ -622,17 +582,30 @@ def main():
     compilation_artifact_dir.mkdir(parents=True, exist_ok=True)
     tests_artifact_dir.mkdir(parents=True, exist_ok=True)
     killed_mutants_artifact_dir.mkdir(parents=True, exist_ok=True)
+    regular_wrong_code_dir.mkdir(parents=True, exist_ok=True)
+    regular_compilation_error_dir.mkdir(parents=True, exist_ok=True)
 
     if args.seed is not None:
         random.seed(args.seed)
 
-    mutation_guided_test_generation(fuzz_d_binary=fuzz_d_binary_path,
+    # Modify if necessary.
+    targeted_backends = [DafnyBackend.GO,
+                         DafnyBackend.PYTHON,
+                         DafnyBackend.CSHARP,
+                         DafnyBackend.JAVASCRIPT,
+                         DafnyBackend.JAVA]
+
+    mutation_guided_test_generation(fuzz_d_reliant_java_binary=java_binary_path,
+                                    fuzz_d_binary=fuzz_d_binary_path,
                                     default_dafny_binary=dafny_binary_path,
                                     mutated_dafny_binary=mutated_dafny_binary_path,
                                     traced_dafny_binary=traced_dafny_binary_path,
+                                    target_backends=targeted_backends,
                                     compilation_artifact_dir=compilation_artifact_dir,
-                                    mutation_testing_artifact_dir=tests_artifact_dir,
+                                    tests_artifact_dir=tests_artifact_dir,
                                     killed_mutants_artifact_dir=killed_mutants_artifact_dir,
+                                    regular_compilation_error_dir=regular_compilation_error_dir,
+                                    regular_wrong_code_dir=regular_wrong_code_dir,
                                     mutation_test_results=mutation_test_results,
                                     source_file_env_var=source_file_env_var,
                                     test_campaign_budget_in_hours=args.test_campaign_timeout,
