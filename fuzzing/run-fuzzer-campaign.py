@@ -13,7 +13,7 @@ import subprocess
 from pathlib import Path
 from random import random
 from datetime import timedelta
-from typing import List, Dict
+from typing import List, Dict, Set, Tuple
 from itertools import chain
 
 from fuzzing.dafny import DafnyBackend, RegularDafnyCompileResult, RegularDafnyBackendExecutionResult, \
@@ -21,10 +21,10 @@ from fuzzing.dafny import DafnyBackend, RegularDafnyCompileResult, RegularDafnyB
 from fuzzing.util.program_status import MutantStatus, RegularProgramStatus
 from fuzzing.util.mutation_registry import MutationRegistry
 from fuzzing.util.mutation_test_result import MutationTestResult, MutationTestStatus
-from fuzzing.util.mutant_trace import MutantTrace
+from fuzzing.util.mutant_trace import MutantTrace, RegressionTestsMutantTraces
 from fuzzing.util.run_subprocess import run_subprocess, ProcessExecutionResult
 from fuzzing.util.helper import all_equal, empty_directory
-from fuzzing.util import constants
+from fuzzing.util import constants, regression_tests
 
 LONG_UPPER_BOUND = (1 << 64) - 1
 COMPILATION_TIMEOUT_SCALE_FACTOR = 3
@@ -117,7 +117,9 @@ def mutation_guided_test_generation(fuzz_d_reliant_java_binary: Path,  # Java 19
                                     killed_mutants_artifact_dir: Path,
                                     regular_compilation_error_dir: Path,
                                     regular_wrong_code_dir: Path,
-                                    mutation_test_results: MutationTestResult,
+                                    mutation_registry: MutationRegistry,
+                                    mutation_test_results: MutationTestResult | None,
+                                    regression_tests_mutant_traces: Dict[str, Set[Tuple[str, str]]] | None,
                                     source_file_env_var: Path | None,
                                     test_campaign_budget_in_hours: int,
                                     generation_budget_in_seconds: int,
@@ -125,15 +127,38 @@ def mutation_guided_test_generation(fuzz_d_reliant_java_binary: Path,  # Java 19
                                     execution_timeout_in_seconds: int):
     # Mutation testing
     killed_mutants: set = set()  # set of (file_env_var, mutant_id)
+    covered_by_regression_tests_but_survived_mutants = set()
+
     # Interesting mutants to generate tests against:
     # 1) Mutants that are not covered by any tests
     # 2) Mutants that are covered by at least one test but survive / passes all tests when activated
-    uncovered_by_regression_tests_mutants = \
-        [tuple(mutant.split(':')) for mutant in
-         mutation_test_results.get_mutants_of_status(MutationTestStatus.Uncovered)]
-    covered_by_regression_tests_but_survived_mutants = \
-        [tuple(mutant.split(':')) for mutant in
-         mutation_test_results.get_mutants_of_status(MutationTestStatus.Survived)]
+    if mutation_test_results is not None:
+        uncovered_by_regression_tests_mutants = \
+            [tuple(mutant.split(':')) for mutant in
+             mutation_test_results.get_mutants_of_status(MutationTestStatus.Uncovered)]
+        covered_by_regression_tests_but_survived_mutants = \
+            [tuple(mutant.split(':')) for mutant in
+             mutation_test_results.get_mutants_of_status(MutationTestStatus.Survived)]
+    elif regression_tests_mutant_traces is not None:
+        # Optimisation: if mutation testing results are not available for regression test suite, we consider all
+        # covered mutants as killed and only fuzz to kill uncovered mutants. This allows both mutation testing
+        # to be run in parallel to fuzzing once execution trace is collected.
+        if source_file_env_var is not None:
+            all_mutants = \
+                set([(source_file_env_var, mutant_id) for mutant_id in
+                     mutation_registry.get_file_registry(str(source_file_env_var)).mutations.keys()])
+        else:
+            # concat list of mutations with itertools.chain
+            all_mutations = chain.from_iterable(
+                registry.mutations for registry in mutation_registry.env_var_to_registry.values())
+            all_mutants = set([(source_file_env_var, mutant_id) for mutant_id in all_mutations.keys()])
+        assert len(all_mutants) > 0
+
+        covered_by_regression_tests_mutants = set(chain.from_iterable(regression_tests_mutant_traces.values()))
+        uncovered_by_regression_tests_mutants = all_mutants.difference(covered_by_regression_tests_mutants)
+    else:
+        print("Insufficient information to fuzz.")
+        exit(1)
 
     # Sanity checks: all input should conform to the expected behaviour
     if not all(len(mutant_info) == 2 for mutant_info in uncovered_by_regression_tests_mutants) or \
@@ -534,7 +559,12 @@ def main():
     parser.add_argument('--tracer_registry', type=str,
                         help='Path to registry generated after instrumenting the Dafny codebase to '
                              'trace mutant executions (.json).')
-    parser.add_argument('--mutation_test_result', type=str, required=True,
+    parser.add_argument("--passing_tests", type=str,
+                        help="Path to file containing lists of passing tests.")
+    parser.add_argument("--regression_test_trace_dir", type=str,
+                        help="Path to directory containing all mutant execution traces after "
+                             "running the Dafny regression test suite.")
+    parser.add_argument('--mutation_test_result', type=str,
                         help="Path to mutation testing result of the Dafny regression test suite (.json).")
     parser.add_argument('--source_file_relative_path', type=str,
                         help="Optional. If specified, only consider mutants for the specified file.")
@@ -598,7 +628,6 @@ def main():
             f"{env['TRACED_DAFNY_ROOT']}") / "Source" / "DafnyCore" / "tracer-registry.mucs.json"
 
     mutation_registry: MutationRegistry = validated_mutant_registry(mutation_registry_path, tracer_registry_path)
-    mutation_test_results: MutationTestResult = MutationTestResult.reconstruct_from_disk(args.mutation_test_result)
 
     source_file_env_var = None
     if args.source_file_relative_path is not None:
@@ -610,9 +639,32 @@ def main():
             exit(1)
         elif len(to_find) > 1:
             print(
-                "Found more than one match for the specified file in mutation registry. Mutation registry may be corrupted.")
+                "Found more than one match for the specified file in mutation registry. "
+                "Mutation registry may be corrupted.")
             exit(1)
         source_file_env_var = to_find[0]
+
+    if args.mutation_test_result is not None:
+        mutation_test_results: MutationTestResult | None = \
+            MutationTestResult.reconstruct_from_disk(Path(args.mutation_test_result).absolute())
+        regression_tests_mutant_traces = None
+    elif args.passing_tests is not None and args.regression_test_trace_dir is not None:
+        # Retrieve execution trace *iff* mutation test results not available.
+        # This is an optimisation to fuzz mutants not reachable by the regression test suite.
+        mutation_test_results = None
+        passing_tests = regression_tests.read_passing_tests(Path(args.passing_tests).absolute())
+        regression_tests_mutant_traces = \
+            RegressionTestsMutantTraces.reconstruct_trace_from_disk(
+                trace_dir=Path(args.regression_test_trace_dir).absolute(),
+                test_cases=passing_tests,
+                source_file_env_var=source_file_env_var
+            )
+        if regression_tests_mutant_traces is None:
+            print("Mutant trace of regression tests are corrupted.")
+            exit(1)
+    else:
+        print("Both regression test execution trace and mutation analysis not made available.")
+        exit(1)
 
     artifact_directory = Path(args.output_directory).absolute()
 
@@ -675,6 +727,8 @@ def main():
                                     regular_compilation_error_dir=regular_compilation_error_dir,
                                     regular_wrong_code_dir=regular_wrong_code_dir,
                                     mutation_test_results=mutation_test_results,
+                                    mutation_registry=mutation_registry,
+                                    regression_tests_mutant_traces=regression_tests_mutant_traces,
                                     source_file_env_var=source_file_env_var,
                                     test_campaign_budget_in_hours=args.test_campaign_timeout,
                                     generation_budget_in_seconds=args.generation_timeout,

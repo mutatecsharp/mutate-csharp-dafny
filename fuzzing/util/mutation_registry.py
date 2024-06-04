@@ -3,6 +3,14 @@ import json
 from pathlib import Path
 
 
+class FileMutationRegistry:
+    def __init__(self, raw_json):
+        self.relative_path = raw_json['FileRelativePath']
+        self.env_var = raw_json['EnvironmentVariable']
+        self.mutations = {mutant_id: Mutation(mutation_json) for mutant_id, mutation_json in
+                          raw_json['Mutations'].items()}
+
+
 class MutationRegistry:
     def __init__(self, raw_json):
         self.file_relative_path_to_registry = {relative_path: FileMutationRegistry(registry_json) for
@@ -22,16 +30,8 @@ class MutationRegistry:
         return MutationRegistry(registry_json)
 
     # Indexed by "ENV_VAR:ID"
-    def get_file_registry(self, env_var: str):
+    def get_file_registry(self, env_var: str) -> FileMutationRegistry:
         return self.env_var_to_registry[env_var]
-
-
-class FileMutationRegistry:
-    def __init__(self, raw_json):
-        self.relative_path = raw_json['FileRelativePath']
-        self.env_var = raw_json['EnvironmentVariable']
-        self.mutations = {mutant_id: Mutation(mutation_json) for mutant_id, mutation_json in
-                          raw_json['Mutations'].items()}
 
 
 class Mutation:

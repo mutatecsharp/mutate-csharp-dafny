@@ -12,11 +12,15 @@ usage() {
 }
 
 DRY_RUN=""
+ONLY_TEST_UNCOVERED=false
 
-while getopts "hd" opt; do
+while getopts "hdu" opt; do
     case $opt in
         d)
             DRY_RUN="--dry-run"
+            ;;
+        u)
+            ONLY_TEST_UNCOVERED=true
             ;;
         h)
             usage
@@ -43,6 +47,7 @@ test -d "$MUTATE_CSHARP_PATH"
 # Sanity check: repository mutated / traced
 test -f "$MUTATED_DAFNY_ROOT/Source/DafnyCore/registry.mucs.json"
 test -f "$TRACED_DAFNY_ROOT/Source/DafnyCore/tracer-registry.mucs.json"
+test -f "$MUTATE_DAFNY_RECORDS_ROOT/passing-tests.txt"
 
 FUZZER_SCRIPT="$(pwd)/fuzzing/run-fuzzer-campaign.py"
 test -f "$FUZZER_SCRIPT"
@@ -56,6 +61,13 @@ if [ -n "$DRY_RUN" ]; then
 fi
 
 # Run fuzzing campaign to catch bugs and generate tests that kill mutants.
-$FUZZER_SCRIPT "$DRY_RUN" \
---output_directory "$FUZZER_OUTPUT_DIR" \
---mutation_test_result "$INTEGRATION_TEST_PATH/mutation-testing.mucs.json"
+if [ $ONLY_TEST_UNCOVERED ]; then
+  $FUZZER_SCRIPT "DRY_RUN" \
+  --passing_tests "$MUTATE_DAFNY_RECORDS_ROOT/passing-tests.txt" \
+  --regression_test_trace_dir "$TRACED_ARTIFACT_PATH/execution-trace" \
+  --output_directory "$FUZZER_OUTPUT_DIR"
+else
+  $FUZZER_SCRIPT "$DRY_RUN" \
+  --output_directory "$FUZZER_OUTPUT_DIR" \
+  --mutation_test_result "$INTEGRATION_TEST_PATH/mutation-testing.mucs.json"
+fi
