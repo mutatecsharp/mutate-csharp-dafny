@@ -6,9 +6,9 @@ from enum import Enum
 from pathlib import Path
 from typing import Optional
 
-from fuzzing.util import constants
-from fuzzing.util.program_status import MutantStatus, RegularProgramStatus
-from fuzzing.util.run_subprocess import run_subprocess, ProcessExecutionResult
+from util import constants
+from util.program_status import MutantStatus, RegularProgramStatus
+from util.run_subprocess import run_subprocess, ProcessExecutionResult
 
 
 @dataclass(frozen=True)
