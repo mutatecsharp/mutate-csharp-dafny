@@ -89,11 +89,16 @@ class DafnyBackend(Enum):
 
     # These errors have appeared in Dafny and not fixed since submission of these bugs by fuzz-d's original author.
     def get_known_compilation_errors(self) -> List[str]:
+        if not self.is_supported:
+            raise NotImplementedError("DafnyBackend.execute_command is not implemented for this backend")
+
+        affects_all_backends = ["type parameter is not declared in this scope"]
+
         if self is DafnyBackend.JAVA:
-            return ["incompatible types", "incompatible bounds", "no suitable method", "lambda", "unreachable statement"]
+            return affects_all_backends + ["incompatible types", "incompatible bounds", "no suitable method", "lambda", "unreachable statement"]
         if self is DafnyBackend.CSHARP:
-            return ["error CS1628", "error CS0103", "at Microsoft.Dafny.Translator.TrForall_NewValueAssumption(IToken tok, List\`1 boundVars, List\`1 bounds, Expression range, Expression lhs, Expression rhs, Attributes attributes, ExpressionTranslator etran, ExpressionTranslator prevEtran)"]
-        return []
+            return affects_all_backends + ["error CS1628", "error CS0103", "at Microsoft.Dafny.Translator.TrForall_NewValueAssumption(IToken tok, List\`1 boundVars, List\`1 bounds, Expression range, Expression lhs, Expression rhs, Attributes attributes, ExpressionTranslator etran, ExpressionTranslator prevEtran)"]
+        return affects_all_backends
 
     def get_known_execution_errors(self) -> List[str]:
         if self is DafnyBackend.JAVA:
