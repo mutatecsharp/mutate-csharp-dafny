@@ -190,6 +190,8 @@ def mutation_guided_test_generation(fuzz_d_reliant_java_binary: Path,  # Java 19
 
     time_of_last_kill = time.time()  # in seconds since epoch
     test_campaign_start_time = time.time()  # in seconds since epoch
+    iterations = 0
+    valid_programs = 0
 
     with (tempfile.TemporaryDirectory(dir=str(compilation_artifact_dir)) as temp_dir):
         logger.info(f"Temporary directory created at: {temp_dir}")
@@ -210,6 +212,7 @@ def mutation_guided_test_generation(fuzz_d_reliant_java_binary: Path,  # Java 19
         while time_budget_exists(
                 test_campaign_start_time_in_seconds=test_campaign_start_time,
                 test_campaign_budget_in_hours=test_campaign_budget_in_hours) and len(surviving_mutants) > 0:
+            iterations += 1
             fuzz_d_fuzzer_seed = random.randint(LONG_LOWER_BOUND, LONG_UPPER_BOUND)
             program_uid = f"fuzzd_{fuzz_d_fuzzer_seed}"  # note: seed can be negative?
             current_program_output_dir = tests_artifact_dir / program_uid
@@ -233,7 +236,10 @@ def mutation_guided_test_generation(fuzz_d_reliant_java_binary: Path,  # Java 19
             assert not any(traced_compilation_dir.iterdir())
             assert not any(default_compilation_dir.iterdir())
 
-            logger.info("Live mutants: {} | Killed mutants: {} | Total mutants considered: {}",
+            logger.info("Attempts: {} | Valid programs generated: {} | Live mutants: {} | Killed mutants: {} | "
+                        "Total mutants considered: {}",
+                        iterations,
+                        valid_programs,
                         len(surviving_mutants),
                         len(killed_mutants),
                         len(surviving_mutants) + len(killed_mutants))
@@ -351,6 +357,8 @@ def mutation_guided_test_generation(fuzz_d_reliant_java_binary: Path,  # Java 19
                 persist_failed_program(RegularProgramStatus.RUNTIME_STDERR_DIFFER, regular_execution_results,
                                        regular_wrong_code_dir / program_uid)
                 continue
+
+            valid_programs += 1
 
             # 8) Compile the generated Dafny program with the trace-instrumented Dafny compiler.
             traced_compilation_results = [
@@ -770,8 +778,9 @@ def main():
     targeted_backends = [DafnyBackend.GO,
                          DafnyBackend.PYTHON,
                          DafnyBackend.CSHARP,
-                         DafnyBackend.JAVASCRIPT,
-                         DafnyBackend.JAVA]
+                         DafnyBackend.JAVASCRIPT]
+                         # DafnyBackend.JAVA]
+    # generated programs do not compile with Java backend due to known bugs (fuzz blocker)
 
     mutation_guided_test_generation(fuzz_d_reliant_java_binary=java_binary_path,
                                     fuzz_d_binary=fuzz_d_binary_path,
