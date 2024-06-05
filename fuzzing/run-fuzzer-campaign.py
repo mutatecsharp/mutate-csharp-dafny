@@ -150,11 +150,11 @@ def mutation_guided_test_generation(fuzz_d_reliant_java_binary: Path,  # Java 19
     # 2) Mutants that are covered by at least one test but survive / passes all tests when activated
     if mutation_test_results is not None:
         uncovered_by_regression_tests_mutants = \
-            [tuple(mutant.split(':')) for mutant in
-             mutation_test_results.get_mutants_of_status(MutationTestStatus.Uncovered)]
+            set(tuple(mutant.split(':')) for mutant in
+                mutation_test_results.get_mutants_of_status(MutationTestStatus.Uncovered))
         covered_by_regression_tests_but_survived_mutants = \
-            [tuple(mutant.split(':')) for mutant in
-             mutation_test_results.get_mutants_of_status(MutationTestStatus.Survived)]
+            set(tuple(mutant.split(':')) for mutant in
+                mutation_test_results.get_mutants_of_status(MutationTestStatus.Survived))
     elif regression_tests_mutant_traces is not None:
         # Optimisation: if mutation testing results are not available for regression test suite, we consider all
         # covered mutants as killed and only fuzz to kill uncovered mutants. This allows both mutation testing
@@ -284,7 +284,6 @@ def mutation_guided_test_generation(fuzz_d_reliant_java_binary: Path,  # Java 19
                 logger.info("Skipping: found known bug with program seeded by {}.", fuzz_d_fuzzer_seed)
                 continue
 
-
             def persist_failed_program(overall_status_code: RegularProgramStatus, result_list: Dict[
                 DafnyBackend, RegularDafnyCompileResult | RegularDafnyBackendExecutionResult], program_error_dir: Path):
                 # Copy fuzz-d generated program and Dafny compilation artifacts
@@ -306,7 +305,6 @@ def mutation_guided_test_generation(fuzz_d_reliant_java_binary: Path,  # Java 19
                 except FileExistsError:
                     logger.info(f"Program with seed {fuzz_d_fuzzer_seed} was independently found to identify "
                                 f"faults in the Dafny compiler.")
-
 
             # 4) Differential testing: compilation of regular Dafny
             if any(result.program_status == RegularProgramStatus.COMPILER_ERROR for _, result in
@@ -779,7 +777,7 @@ def main():
                          DafnyBackend.PYTHON,
                          DafnyBackend.CSHARP,
                          DafnyBackend.JAVASCRIPT]
-                         # DafnyBackend.JAVA]
+    # DafnyBackend.JAVA]
     # generated programs do not compile with Java backend due to known bugs (fuzz blocker)
 
     mutation_guided_test_generation(fuzz_d_reliant_java_binary=java_binary_path,
