@@ -79,7 +79,7 @@ class DafnyBackend(Enum):
         elif self is DafnyBackend.JAVASCRIPT:
             return ["node", f"{str(artifact_dir / file_name)}.js"]
         elif self is DafnyBackend.PYTHON:
-            return ["python3", f"{str(artifact_dir / file_name)}-py/{file_name}.py"]
+            return ["python3", f"{str(artifact_dir / file_name)}-py/__{file_name}__.py"]
         elif self is DafnyBackend.CSHARP:
             return ["dotnet", f"{str(artifact_dir / file_name)}.dll"]
         elif self is DafnyBackend.GO:
