@@ -127,7 +127,7 @@ def mutation_guided_test_generation(fuzz_d_reliant_java_binary: Path,  # Java 19
                                     killed_mutants_artifact_dir: Path,
                                     regular_compilation_error_dir: Path,
                                     regular_wrong_code_dir: Path,
-                                    killing_tests_dir: Path,
+                                    killing_tests_artifact_dir: Path,
                                     mutation_registry: MutationRegistry,
                                     mutation_test_results: MutationTestResult | None,
                                     regression_tests_mutant_traces: Dict[str, Set[Tuple[str, str]]] | None,
