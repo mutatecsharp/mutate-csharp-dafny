@@ -159,7 +159,10 @@ def mutation_guided_test_generation(fuzz_d_reliant_java_binary: Path,  # Java 19
         # Here we know the killed mutants so we can populate the killed_mutants set
         killed_mutants = \
             set(tuple(mutant.split(':')) for mutant in
-                mutation_test_results.get_mutants_of_status(MutationTestStatus.Killed))
+                mutation_test_results.get_mutants_of_status(MutationTestStatus.Killed)).union(
+                set(tuple(mutant.split(':')) for mutant in
+                    mutation_test_results.get_mutants_of_status(MutationTestStatus.Timeout))
+            )
     elif regression_tests_mutant_traces is not None:
         # Optimisation: if mutation testing results are not available for regression test suite, we consider all
         # covered mutants as killed and only fuzz to kill uncovered mutants. This allows both mutation testing
