@@ -4,6 +4,7 @@ import subprocess
 
 from collections import namedtuple
 
+# (exit_code: int, stdout: byte, stderr: byte, timeout: bool)
 ProcessExecutionResult = namedtuple('ProcessExecutionResult', ['exit_code', 'stdout', 'stderr', 'timeout'])
 
 

@@ -26,12 +26,6 @@ from util.run_subprocess import run_subprocess, ProcessExecutionResult
 from util.helper import all_equal, empty_directory
 from util import constants, regression_tests
 
-LONG_LOWER_BOUND = -(1 << 63)
-LONG_UPPER_BOUND = (1 << 63) - 1
-COMPILATION_TIMEOUT_SCALE_FACTOR = 3
-EXECUTION_TIMEOUT_SCALE_FACTOR = 3
-EXECUTION_TRACE_OUTPUT_ENV_VAR = "MUTATE_CSHARP_TRACER_FILEPATH"
-
 
 def validate_volume_directory_exists():
     volume_dir = os.environ.get('VOLUME_ROOT')
@@ -133,6 +127,7 @@ def mutation_guided_test_generation(fuzz_d_reliant_java_binary: Path,  # Java 19
                                     killed_mutants_artifact_dir: Path,
                                     regular_compilation_error_dir: Path,
                                     regular_wrong_code_dir: Path,
+                                    killing_tests_dir: Path,
                                     mutation_registry: MutationRegistry,
                                     mutation_test_results: MutationTestResult | None,
                                     regression_tests_mutant_traces: Dict[str, Set[Tuple[str, str]]] | None,
@@ -224,7 +219,7 @@ def mutation_guided_test_generation(fuzz_d_reliant_java_binary: Path,  # Java 19
                 test_campaign_start_time_in_seconds=test_campaign_start_time,
                 test_campaign_budget_in_hours=test_campaign_budget_in_hours) and len(surviving_mutants) > 0:
             iterations += 1
-            fuzz_d_fuzzer_seed = random.randint(LONG_LOWER_BOUND, LONG_UPPER_BOUND)
+            fuzz_d_fuzzer_seed = random.randint(constants.LONG_LOWER_BOUND, constants.LONG_UPPER_BOUND)
             program_uid = f"fuzzd_{fuzz_d_fuzzer_seed}"  # note: seed can be negative?
             current_program_output_dir = tests_artifact_dir / program_uid
 
@@ -304,13 +299,27 @@ def mutation_guided_test_generation(fuzz_d_reliant_java_binary: Path,  # Java 19
                                     dst=f"{program_error_dir}/fuzz_d_generation")
                     shutil.copytree(src=str(default_compilation_dir),
                                     dst=f"{program_error_dir}/default_compilation")
+
+                    # Persist additional information into json so we don't have to rerun the program manually
+                    raw_json = {"overall_status": overall_status_code.name,
+                                "failed_target_backends": [
+                                    {"backend": backend.name,
+                                     "program_status": result.program_status.name}
+                                    for backend, result in result_list.items() if
+                                    result.program_status != RegularProgramStatus.EXPECTED_SUCCESS],
+                                "program_generator": "fuzz-d",
+                                "exit_codes": [
+                                    {"backend": backend.name, "exit_code": result.execution_result.exit_code}
+                                    for backend, result in result_list.items()],
+                                "stdout": [
+                                    {"backend": backend.name, "stdout": result.execution_result.stdout.decode('utf-8')}
+                                    for backend, result in result_list.items()],
+                                "stderr": [
+                                    {"backend": backend.name, "stderr": result.execution_result.stderr.decode('utf-8')}
+                                    for backend, result in result_list.items()]}
+
                     with open(f"{program_error_dir}/regular_error.json", "w") as regular_error_file:
-                        json.dump({"overall_status": overall_status_code.name,
-                                   "failed_target_backends": [
-                                       {"backend": backend.name, "program_status": result.program_status.name}
-                                       for backend, result in result_list.items() if
-                                       result.program_status != RegularProgramStatus.EXPECTED_SUCCESS]
-                                   }, regular_error_file, indent=4)
+                        json.dump(raw_json, regular_error_file, indent=4)
                 except FileExistsError:
                     logger.info(f"Program with seed {fuzz_d_fuzzer_seed} was independently found to identify "
                                 f"faults in the Dafny compiler.")
@@ -423,10 +432,11 @@ def mutation_guided_test_generation(fuzz_d_reliant_java_binary: Path,  # Java 19
             candidate_mutants_for_program = [(env_var, mutant_id) for (env_var, mutant_id) in mutants_covered_by_program
                                              if (env_var, mutant_id) not in killed_mutants]
 
-            logger.info("Number of mutants covered by generated program with seed {}: {} | Survived mutants that are covered: {}",
-                        fuzz_d_fuzzer_seed,
-                        len(mutants_covered_by_program),
-                        len(candidate_mutants_for_program))
+            logger.info(
+                "Number of mutants covered by generated program with seed {}: {} | Survived mutants that are covered: {}",
+                fuzz_d_fuzzer_seed,
+                len(mutants_covered_by_program),
+                len(candidate_mutants_for_program))
 
             # 13) Perform mutation testing on the generated Dafny program with the mutated Dafny compiler.
             mutants_skipped_by_program = [(env_var, mutant_id) for (env_var, mutant_id) in mutants_covered_by_program
@@ -442,6 +452,7 @@ def mutation_guided_test_generation(fuzz_d_reliant_java_binary: Path,  # Java 19
 
                 # Important to verify the corresponding check in C# has the same name.
                 mutant_killed_dir = killed_mutants_artifact_dir / f"{env_var}-{mutant_id}"
+                killing_test_dir = killing_tests_dir / program_uid
                 if mutant_killed_dir.exists():
                     if (env_var, mutant_id) in surviving_mutants:
                         surviving_mutants.remove((env_var, mutant_id))
@@ -449,6 +460,7 @@ def mutation_guided_test_generation(fuzz_d_reliant_java_binary: Path,  # Java 19
                     mutants_skipped_by_program.append((env_var, mutant_id))
                     logger.info(
                         f"Skipping: mutant {env_var}:{mutant_id} was killed by another runner or a regression test.")
+                    continue
 
                 logger.info(
                     "[Current session] Surviving mutants: {} | Killed mutants: {}", len(surviving_mutants),
@@ -469,14 +481,15 @@ def mutation_guided_test_generation(fuzz_d_reliant_java_binary: Path,  # Java 19
                                                           mutant_id=mutant_id,
                                                           timeout_in_seconds=max(float(compilation_timeout_in_seconds),
                                                                                  regular_compile_result.elapsed_time *
-                                                                                 COMPILATION_TIMEOUT_SCALE_FACTOR))
+                                                                                 constants.COMPILATION_TIMEOUT_SCALE_FACTOR))
                     for target, regular_compile_result in regular_compilation_results.items()
                 }
 
                 # 15) Execute the generated Dafny program with the executable artifact produced by
                 # mutated Dafny compiler.
                 mutated_execution_results = dict()
-                if all(result.mutant_status == MutantStatus.SURVIVED for result in mutated_compilation_results.values()):
+                if all(result.mutant_status == MutantStatus.SURVIVED for result in
+                       mutated_compilation_results.values()):
                     mutated_execution_results = {
                         target:
                             target.mutant_execution(dafny_file_dir=mutated_compilation_dir,
@@ -486,7 +499,7 @@ def mutation_guided_test_generation(fuzz_d_reliant_java_binary: Path,  # Java 19
                                                     timeout_in_seconds=max(float(execution_timeout_in_seconds),
                                                                            regular_execution_results[
                                                                                target].elapsed_time *
-                                                                           EXECUTION_TIMEOUT_SCALE_FACTOR))
+                                                                           constants.EXECUTION_TIMEOUT_SCALE_FACTOR))
                         for target, result in mutated_compilation_results.items()
                     }
 
@@ -516,20 +529,36 @@ def mutation_guided_test_generation(fuzz_d_reliant_java_binary: Path,  # Java 19
                 }
 
                 def persist_kill_info(overall_mutant_status: MutantStatus,
-                                      result_dict: Dict[DafnyBackend, MutantStatus], output_dir: Path):
+                                      result_dict: Dict[DafnyBackend, MutantStatus],
+                                      killed_mutant_output_dir: Path,
+                                      killing_test_output_dir: Path):
                     # Copy fuzz-d generated program and Dafny compilation artifacts
                     try:
-                        output_dir.mkdir()
+                        killed_mutant_output_dir.mkdir()
+                        killing_test_output_dir.mkdir()
+                        killed_mutant_json_path = killed_mutant_output_dir / "kill_info.json"
+                        killing_test_json_path = killing_test_output_dir / "kill_info.json"
+
                         logger.success(
-                            f"Kill results for mutant {env_var}:{mutant_id} will be persisted to {str(output_dir / 'kill_info.json')}).")
-                        with open(str(output_dir / "kill_info.json"), "w") as killed_file_io:
-                            json.dump({"overall_status": overall_mutant_status.name,
-                                       "failed_target_backends": [
-                                           {"backend": backend.name, "mutant_status": mutant_status.name}
-                                           for backend, mutant_status in result_dict.items() if
-                                           mutant_status != MutantStatus.SURVIVED
-                                       ]},
-                                      killed_file_io, indent=4)
+                            "Kill results for mutant {}:{} will be persisted to {} and {}).",
+                            env_var,
+                            mutant_id,
+                            str(killed_mutant_json_path),
+                            str(killing_test_json_path))
+
+                        # Persist additional information into json so we don't have to rerun the program manually
+                        raw_json = {"overall_status": overall_mutant_status.name,
+                                    "failed_target_backends": [
+                                        {"backend": backend.name, "mutant_status": mutant_status.name}
+                                        for backend, mutant_status in result_dict.items() if
+                                        mutant_status != MutantStatus.SURVIVED
+                                    ],
+                                    "program_generator": "fuzz-d"}
+
+                        with killed_mutant_json_path.open('w') as killed_mutant_file:
+                            json.dump(raw_json, killed_mutant_file, indent=4)
+                        with killing_test_json_path.open('w') as killing_test_file:
+                            json.dump(raw_json, killing_test_file, indent=4)
                     except FileExistsError:
                         logger.info(
                             f"Skipping: another runner determined this mutant ({env_var}:{mutant_id}) as killed.")
@@ -539,27 +568,32 @@ def mutation_guided_test_generation(fuzz_d_reliant_java_binary: Path,  # Java 19
                        mutant_error_statuses.values()):
                     persist_kill_info(overall_mutant_status=MutantStatus.KILLED_COMPILER_CRASHED,
                                       result_dict=mutant_error_statuses,
-                                      output_dir=mutant_killed_dir)
+                                      killed_mutant_output_dir=mutant_killed_dir,
+                                      killing_test_output_dir=killing_test_dir)
                 elif any(mutant_status == MutantStatus.KILLED_COMPILER_TIMEOUT for mutant_status in
                          mutant_error_statuses.values()):
                     persist_kill_info(overall_mutant_status=MutantStatus.KILLED_COMPILER_TIMEOUT,
                                       result_dict=mutant_error_statuses,
-                                      output_dir=mutant_killed_dir)
+                                      killed_mutant_output_dir=mutant_killed_dir,
+                                      killing_test_output_dir=killing_test_dir)
                 elif any(mutant_status == MutantStatus.KILLED_RUNTIME_EXITCODE_DIFFER for mutant_status in
                          mutant_error_statuses.values()):
                     persist_kill_info(overall_mutant_status=MutantStatus.KILLED_RUNTIME_EXITCODE_DIFFER,
                                       result_dict=mutant_error_statuses,
-                                      output_dir=mutant_killed_dir)
+                                      killed_mutant_output_dir=mutant_killed_dir,
+                                      killing_test_output_dir=killing_test_dir)
                 elif any(mutant_status == MutantStatus.KILLED_RUNTIME_STDOUT_DIFFER for mutant_status in
                          mutant_error_statuses.values()):
                     persist_kill_info(overall_mutant_status=MutantStatus.KILLED_RUNTIME_STDOUT_DIFFER,
                                       result_dict=mutant_error_statuses,
-                                      output_dir=mutant_killed_dir)
+                                      killed_mutant_output_dir=mutant_killed_dir,
+                                      killing_test_output_dir=killing_test_dir)
                 elif any(mutant_status == MutantStatus.KILLED_RUNTIME_STDERR_DIFFER for mutant_status in
                          mutant_error_statuses.values()):
                     persist_kill_info(overall_mutant_status=MutantStatus.KILLED_RUNTIME_STDERR_DIFFER,
                                       result_dict=mutant_error_statuses,
-                                      output_dir=mutant_killed_dir)
+                                      killed_mutant_output_dir=mutant_killed_dir,
+                                      killing_test_output_dir=killing_test_dir)
 
             # 18) Complete testing current program against all surviving mutants.
             all_mutants_considered_by_program = mutants_killed_by_program + \
@@ -763,6 +797,7 @@ def main():
     compilation_artifact_dir = artifact_directory / "compilations"
 
     tests_artifact_dir = artifact_directory / 'tests'
+    killing_tests_dir = artifact_directory / "killing_tests"
     regular_compilation_error_dir = artifact_directory / 'regular-compilation-errors'
     regular_wrong_code_dir = artifact_directory / 'regular-wrong-code'
     killed_mutants_artifact_dir = artifact_directory / 'killed_mutants'
@@ -776,6 +811,7 @@ def main():
     logger.info(f"killed mutants artifact output directory: {killed_mutants_artifact_dir}")
     logger.info(f"regular compilation error output directory: {regular_compilation_error_dir}")
     logger.info(f"regular wrong code bug output directory: {regular_wrong_code_dir}")
+    logger.info("killing tests output directory: {}", killing_tests_dir)
 
     if source_file_env_var is not None:
         logger.info(f"Specified file: {args.source_file_relative_path} | Env var: {source_file_env_var}")
@@ -789,6 +825,7 @@ def main():
     killed_mutants_artifact_dir.mkdir(parents=True, exist_ok=True)
     regular_wrong_code_dir.mkdir(parents=True, exist_ok=True)
     regular_compilation_error_dir.mkdir(parents=True, exist_ok=True)
+    killing_tests_dir.mkdir(parents=True, exist_ok=True)
 
     if args.seed is not None:
         random.seed(args.seed)
@@ -812,6 +849,7 @@ def main():
                                     killed_mutants_artifact_dir=killed_mutants_artifact_dir,
                                     regular_compilation_error_dir=regular_compilation_error_dir,
                                     regular_wrong_code_dir=regular_wrong_code_dir,
+                                    killing_tests_artifact_dir=killing_tests_dir,
                                     mutation_test_results=mutation_test_results,
                                     mutation_registry=mutation_registry,
                                     regression_tests_mutant_traces=regression_tests_mutant_traces,
