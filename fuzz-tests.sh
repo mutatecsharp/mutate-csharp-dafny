@@ -64,6 +64,7 @@ fi
 # Run fuzzing campaign to catch bugs and generate tests that kill mutants.
 # Focus on SinglePassCodeGenerator.cs.
 SOURCE_FILE_UNDER_TEST="Backends/SinglePassCodeGenerator.cs"
+WORKER_COUNT=32
 
 if [ $ONLY_TEST_UNCOVERED ]; then
   echo "only fuzz mutants unreachable by regression test suite."
@@ -76,8 +77,10 @@ else
   # Sanity check: repository mutation analysis recorded
   test -f "$MUTATION_ANALYSIS_PATH"
   echo "fuzz all survived mutants."
-  $FUZZER_SCRIPT $DRY_RUN \
-  --source_file_relative_path "$SOURCE_FILE_UNDER_TEST" \
-  --output_directory "$FUZZER_OUTPUT_DIR" \
-  --mutation_test_result "$MUTATION_ANALYSIS_PATH"
+  for _ in $(seq 1 $WORKER_COUNT); do
+    $FUZZER_SCRIPT $DRY_RUN \
+    --source_file_relative_path "$SOURCE_FILE_UNDER_TEST" \
+    --output_directory "$FUZZER_OUTPUT_DIR" \
+    --mutation_test_result "$MUTATION_ANALYSIS_PATH" \
+  & done
 fi
