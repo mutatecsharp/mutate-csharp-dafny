@@ -504,7 +504,7 @@ def mutation_guided_test_generation(fuzz_d_reliant_java_binary: Path,  # Java 19
                 time_of_last_kill = time.time()
                 killed_mutants_this_session_count += 1
                 logger.success(f"Mutant {env_var}:{mutant_id} killed | Killed mutants: {len(killed_mutants)} | "
-                               f"Time taken since last kill: {str(kill_elapsed_time)}")
+                               f"Time taken since last kill: {str(timedelta(int(kill_elapsed_time)))}")
 
                 # Merge the results between compilation and execution of program produced by mutated Dafny compiler.
                 mutant_error_statuses = {
