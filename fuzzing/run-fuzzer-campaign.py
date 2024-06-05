@@ -470,7 +470,7 @@ def mutation_guided_test_generation(fuzz_d_reliant_java_binary: Path,  # Java 19
                 # 15) Execute the generated Dafny program with the executable artifact produced by
                 # mutated Dafny compiler.
                 mutated_execution_results = dict()
-                if all(result.status == MutantStatus.SURVIVED for _, result in mutated_compilation_results):
+                if all(result.mutant_status == MutantStatus.SURVIVED for result in mutated_compilation_results.values()):
                     mutated_execution_results = {
                         target:
                             target.mutant_execution(dafny_file_dir=mutated_compilation_dir,
@@ -485,7 +485,7 @@ def mutation_guided_test_generation(fuzz_d_reliant_java_binary: Path,  # Java 19
                     }
 
                 if len(mutated_execution_results) > 0 and \
-                        all(mutant_status == MutantStatus.SURVIVED for mutant_status in
+                        all(result.mutant_status == MutantStatus.SURVIVED for result in
                             mutated_execution_results.values()):
                     mutants_covered_but_not_killed_by_program.append((env_var, mutant_id))
                     logger.info(f"Finished processing mutant {env_var}:{mutant_id}. Kill result: SURVIVED")
