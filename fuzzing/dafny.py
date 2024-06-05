@@ -135,16 +135,17 @@ class DafnyBackend(Enum):
             elapsed_time = time.time() - start_time
 
         standard_output = stdout.decode('utf-8')
+        standard_error = stderr.decode('utf-8')
 
         logger.info(standard_output)
         if stderr:
-            logger.error(stderr.decode('utf-8'))
+            logger.error(standard_error)
 
         if exit_code != 0:
             program_status = RegularProgramStatus.COMPILER_ERROR
 
-            if any(standard_output.contains(known_error_substring) for known_error_substring
-                   in self.get_known_compilation_errors()):
+            if any(known_error_substring in standard_output or known_error_substring in standard_error
+                   for known_error_substring in self.get_known_compilation_errors()):
                 program_status = RegularProgramStatus.KNOWN_BUG
 
             logger.info("[DETECT] Exit code non-zero for regular compilation")
@@ -171,10 +172,11 @@ class DafnyBackend(Enum):
         elapsed_time = time.time() - start_time
 
         standard_output = runtime_result.stdout.decode('utf-8')
+        standard_error = runtime_result.stderr.decode('utf-8')
 
         logger.info(standard_output)
         if runtime_result.stderr:
-            logger.error(runtime_result.stderr.decode('utf-8'))
+            logger.error(standard_error)
 
         if runtime_result.timeout:
             program_status = RegularProgramStatus.RUNTIME_TIMEOUT
@@ -182,8 +184,8 @@ class DafnyBackend(Enum):
         elif runtime_result.exit_code != 0:
             program_status = RegularProgramStatus.RUNTIME_EXITCODE_NON_ZERO
 
-            if any(standard_output.contains(known_error_substring) for known_error_substring
-                   in self.get_known_execution_errors()):
+            if any(known_error_substring in standard_output or known_error_substring in standard_error
+                   for known_error_substring in self.get_known_execution_errors()):
                 program_status = RegularProgramStatus.KNOWN_BUG
 
             logger.info("[DETECT] Exit code non-zero for regular execution")
