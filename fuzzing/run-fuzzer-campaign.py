@@ -274,7 +274,7 @@ def mutation_guided_test_generation(fuzz_d_reliant_java_binary: Path,  # Java 19
 
             # Handle special case where error is known
             if any(result.program_status == RegularProgramStatus.KNOWN_BUG for result in
-                   regular_execution_results.values()):
+                   regular_compilation_results.values()):
                 logger.info("Skipping: found known bug with program seeded by {}.", fuzz_d_fuzzer_seed)
                 continue
 
@@ -293,7 +293,7 @@ def mutation_guided_test_generation(fuzz_d_reliant_java_binary: Path,  # Java 19
                     with open(f"{program_error_dir}/regular_error.json", "w") as regular_error_file:
                         json.dump({"overall_status": overall_status_code.name,
                                    "failed_target_backends": [
-                                       {"backend": backend.name, "program_status": result.program_status}
+                                       {"backend": backend.name, "program_status": result.program_status.name}
                                        for backend, result in result_list.items() if
                                        result.program_status != RegularProgramStatus.EXPECTED_SUCCESS]
                                    }, regular_error_file, indent=4)
@@ -498,7 +498,7 @@ def mutation_guided_test_generation(fuzz_d_reliant_java_binary: Path,  # Java 19
                         with open(str(output_dir / "kill_info.json"), "w") as killed_file_io:
                             json.dump({"overall_status": overall_mutant_status.name,
                                        "failed_target_backends": [
-                                           {"backend": backend.name, "mutant_status": mutant_status}
+                                           {"backend": backend.name, "mutant_status": mutant_status.name}
                                            for backend, mutant_status in result_dict.items() if
                                            mutant_status != MutantStatus.SURVIVED
                                        ]},
