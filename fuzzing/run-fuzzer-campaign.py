@@ -438,7 +438,8 @@ def mutation_guided_test_generation(fuzz_d_reliant_java_binary: Path,  # Java 19
                 # Important to verify the corresponding check in C# has the same name.
                 mutant_killed_dir = killed_mutants_artifact_dir / f"{env_var}-{mutant_id}"
                 if mutant_killed_dir.exists():
-                    surviving_mutants.remove((env_var, mutant_id))
+                    if (env_var, mutant_id) in surviving_mutants:
+                        surviving_mutants.remove((env_var, mutant_id))
                     killed_mutants.add((env_var, mutant_id))
                     mutants_skipped_by_program.append((env_var, mutant_id))
                     logger.info(
@@ -492,7 +493,8 @@ def mutation_guided_test_generation(fuzz_d_reliant_java_binary: Path,  # Java 19
                     continue
 
                 # 16) If we reached here, we found a test case to contribute to Dafny! Good work.
-                surviving_mutants.remove((env_var, mutant_id))
+                if (env_var, mutant_id) in surviving_mutants:
+                    surviving_mutants.remove((env_var, mutant_id))
                 killed_mutants.add((env_var, mutant_id))
                 mutants_killed_by_program.append((env_var, mutant_id))
                 kill_elapsed_time = time.time() - time_of_last_kill
