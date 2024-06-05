@@ -190,6 +190,7 @@ def mutation_guided_test_generation(fuzz_d_reliant_java_binary: Path,  # Java 19
     # set of (file_env_var, mutant_id)
     surviving_mutants: set = set(uncovered_by_regression_tests_mutants.union(
         covered_by_regression_tests_but_survived_mutants))
+
     logger.info("Live mutants: {} | Mutants unreachable by Dafny regression tests: {}", len(surviving_mutants),
                 len(uncovered_by_regression_tests_mutants))
 
@@ -197,6 +198,8 @@ def mutation_guided_test_generation(fuzz_d_reliant_java_binary: Path,  # Java 19
     test_campaign_start_time = time.time()  # in seconds since epoch
     iterations = 0
     valid_programs = 0
+    considered_mutants_this_session_count = len(surviving_mutants)
+    killed_mutants_this_session_count = 0
 
     with (tempfile.TemporaryDirectory(dir=str(compilation_artifact_dir)) as temp_dir):
         logger.info(f"Temporary directory created at: {temp_dir}")
@@ -241,13 +244,14 @@ def mutation_guided_test_generation(fuzz_d_reliant_java_binary: Path,  # Java 19
             assert not any(traced_compilation_dir.iterdir())
             assert not any(default_compilation_dir.iterdir())
 
-            logger.info("Attempts: {} | Valid programs generated: {} | Live mutants: {} | Killed mutants: {} | "
-                        "Total mutants considered: {}",
+            logger.info("Attempts: {} | Valid programs generated: {} | Live mutants: {} | "
+                        "Killed mutants this session: {} | "
+                        "Total mutants considered this session: {}",
                         iterations,
                         valid_programs,
                         len(surviving_mutants),
-                        len(killed_mutants),
-                        len(surviving_mutants) + len(killed_mutants))
+                        killed_mutants_this_session_count,
+                        considered_mutants_this_session_count)
             logger.info("Fuzzing with fuzz-d with seed {}", fuzz_d_fuzzer_seed)
 
             # 1) Generate a valid Dafny program
@@ -493,6 +497,7 @@ def mutation_guided_test_generation(fuzz_d_reliant_java_binary: Path,  # Java 19
                 mutants_killed_by_program.append((env_var, mutant_id))
                 kill_elapsed_time = time.time() - time_of_last_kill
                 time_of_last_kill = time.time()
+                killed_mutants_this_session_count += 1
                 logger.success(f"Mutant {env_var}:{mutant_id} killed | Killed mutants: {len(killed_mutants)} | "
                                f"Time taken since last kill: {str(kill_elapsed_time)}")
 
