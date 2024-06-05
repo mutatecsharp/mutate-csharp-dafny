@@ -452,7 +452,7 @@ def mutation_guided_test_generation(fuzz_d_reliant_java_binary: Path,  # Java 19
 
                 # Important to verify the corresponding check in C# has the same name.
                 mutant_killed_dir = killed_mutants_artifact_dir / f"{env_var}-{mutant_id}"
-                killing_test_dir = killing_tests_dir / program_uid
+                killing_test_dir = killing_tests_artifact_dir / program_uid
                 if mutant_killed_dir.exists():
                     if (env_var, mutant_id) in surviving_mutants:
                         surviving_mutants.remove((env_var, mutant_id))
