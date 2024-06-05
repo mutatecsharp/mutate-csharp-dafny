@@ -309,9 +309,15 @@ def mutation_guided_test_generation(fuzz_d_reliant_java_binary: Path,  # Java 19
                                 f"faults in the Dafny compiler.")
 
             # 4) Differential testing: compilation of regular Dafny
-            if any(result.program_status == RegularProgramStatus.COMPILER_ERROR for _, result in
+            if any(result.program_status == RegularProgramStatus.COMPILER_EXITCODE_NON_ZERO for _, result in
                    regular_compilation_results.items()):
-                persist_failed_program(RegularProgramStatus.COMPILER_ERROR, regular_compilation_results,
+                persist_failed_program(RegularProgramStatus.COMPILER_EXITCODE_NON_ZERO, regular_compilation_results,
+                                       regular_compilation_error_dir / program_uid)
+                continue
+
+            if any(result.program_status == RegularProgramStatus.COMPILER_TIMEOUT for _, result in
+                   regular_compilation_results.items()):
+                persist_failed_program(RegularProgramStatus.COMPILER_TIMEOUT, regular_compilation_results,
                                        regular_compilation_error_dir / program_uid)
                 continue
 
