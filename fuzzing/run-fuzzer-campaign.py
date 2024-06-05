@@ -81,9 +81,6 @@ def validated_mutant_registry(mutation_registry_path: Path, tracer_registry_path
     return mutation_registry
 
 
-trials = 2
-
-
 def time_budget_exists(test_campaign_start_time_in_seconds: float,
                        test_campaign_budget_in_hours: int):
     time_budget_in_seconds = test_campaign_budget_in_hours * 3600
@@ -91,13 +88,6 @@ def time_budget_exists(test_campaign_start_time_in_seconds: float,
 
     elapsed_timedelta = timedelta(seconds=elapsed_time_in_seconds)
     logger.info(f"Test campaign elapsed time: {str(elapsed_timedelta)}")
-
-    global trials
-
-    if trials == 0:
-        return False
-
-    trials -= 1
 
     return elapsed_time_in_seconds < time_budget_in_seconds
 
