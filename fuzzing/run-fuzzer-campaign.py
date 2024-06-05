@@ -423,8 +423,10 @@ def mutation_guided_test_generation(fuzz_d_reliant_java_binary: Path,  # Java 19
             candidate_mutants_for_program = [(env_var, mutant_id) for (env_var, mutant_id) in mutants_covered_by_program
                                              if (env_var, mutant_id) not in killed_mutants]
 
-            logger.info(
-                f"Number of mutants covered by generated program with seed {fuzz_d_fuzzer_seed}: {len(mutants_covered_by_program)}")
+            logger.info("Number of mutants covered by generated program with seed {}: {} | Survived mutants that are covered: {}",
+                        fuzz_d_fuzzer_seed,
+                        len(mutants_covered_by_program),
+                        len(candidate_mutants_for_program))
 
             # 13) Perform mutation testing on the generated Dafny program with the mutated Dafny compiler.
             mutants_skipped_by_program = [(env_var, mutant_id) for (env_var, mutant_id) in mutants_covered_by_program
