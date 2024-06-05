@@ -256,14 +256,11 @@ def mutation_guided_test_generation(fuzz_d_reliant_java_binary: Path,  # Java 19
             logger.info("fuzz-d generated program can be found at: {}", fuzz_d_generation_dir)
 
             # 2) Copy the fuzz-d generated Dafny program to other mode directories.
-            try:
-                current_program_output_dir.mkdir()
-            except FileExistsError:
+            if current_program_output_dir.exists():
                 logger.info(f"Skipping: another runner is working on the same seed ({fuzz_d_fuzzer_seed}).")
                 continue
 
-            copy_destinations = [current_program_output_dir, mutated_compilation_dir, traced_compilation_dir,
-                                 default_compilation_dir]
+            copy_destinations = [mutated_compilation_dir, traced_compilation_dir, default_compilation_dir]
 
             for destination in copy_destinations:
                 shutil.copytree(src=fuzz_d_generation_dir, dst=destination, dirs_exist_ok=True)

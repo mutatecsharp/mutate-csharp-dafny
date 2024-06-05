@@ -14,7 +14,7 @@ class MutantTrace:
         # remove duplicates
         mutants_covered_by_program = list(set(mutants_covered_by_program))
 
-        if any(env_var_to_mutant_id is not None for env_var_to_mutant_id in mutants_covered_by_program):
+        if any(env_var_to_mutant_id is None for env_var_to_mutant_id in mutants_covered_by_program):
             return None
 
         # Filter for particular source file under test if specified and discard killed mutants from consideration.
