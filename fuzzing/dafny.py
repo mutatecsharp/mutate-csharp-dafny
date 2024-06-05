@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
 from typing import Optional, List
+from loguru import logger
 
 from util import constants
 from util.program_status import MutantStatus, RegularProgramStatus
@@ -104,6 +105,8 @@ class DafnyBackend(Enum):
         compile_command = ["dotnet", str(dafny_binary), "build", "--no-verify", "--allow-warnings",
                            f"--target:{self.target_flag}", f"{str(dafny_file_dir / dafny_file_name)}.dfy"]
 
+        logger.info("Compiling with regular Dafny | Command: {command}", command=' '.join(compile_command))
+
         # Trace mutants
         if trace_output_path is not None:
             start_time = time.time()
@@ -117,17 +120,16 @@ class DafnyBackend(Enum):
             (exit_code, stdout, stderr, timeout) = run_subprocess(compile_command, timeout_in_seconds)
             elapsed_time = time.time() - start_time
 
+        logger.info(stdout.decode('utf-8'))
+        if stderr:
+            logger.error(stderr.decode('utf-8'))
+
         if exit_code != 0:
             program_status = RegularProgramStatus.COMPILER_ERROR
-            print(f"""[DETECT] Exit code non-zero for regular compilation
-            Standard output:
-            {stdout.decode('utf-8')}
-            Standard error:
-            {stderr.decode('utf-8')}
-            """)
+            logger.info("[DETECT] Exit code non-zero for regular compilation")
         elif timeout:
             program_status = RegularProgramStatus.COMPILER_ERROR
-            print("[DETECT] Timeout for regular compilation")
+            logger.info("[DETECT] Timeout for regular compilation")
         else:
             program_status = RegularProgramStatus.EXPECTED_SUCCESS
 
@@ -140,17 +142,23 @@ class DafnyBackend(Enum):
         # Executes the binary resulting from Dafny compilation.
         execute_binary_command = self.get_execute_command(artifact_dir=backend_artifact_dir, file_name=dafny_file_name)
 
+        logger.info("Executing regular Dafny compilation result | Command: {command}", command=' '.join(execute_binary_command))
+
         start_time = time.time()
         runtime_result = run_subprocess(execute_binary_command,
                                         timeout_in_seconds)  # (exit_code, stdout, stderr, timeout)
         elapsed_time = time.time() - start_time
 
+        logger.info(runtime_result.stdout.decode('utf-8'))
+        if runtime_result.stderr:
+            logger.error(runtime_result.stderr.decode('utf-8'))
+
         if runtime_result.timeout:
             program_status = RegularProgramStatus.RUNTIME_TIMEOUT
-            print("[DETECT] Timeout for regular execution")
+            logger.info("[DETECT] Timeout for regular execution")
         elif runtime_result.exit_code != 0:
             program_status = RegularProgramStatus.RUNTIME_EXITCODE_NON_ZERO
-            print("[DETECT] Exit code non-zero for regular execution")
+            logger.info("[DETECT] Exit code non-zero for regular execution")
         else:
             program_status = RegularProgramStatus.EXPECTED_SUCCESS
 
@@ -172,10 +180,16 @@ class DafnyBackend(Enum):
         compile_command = ["dotnet", str(dafny_binary), "build", "--no-verify", "--allow-warnings",
                            f"--target:{self.target_flag}", f"{str(dafny_file_dir / dafny_file_name)}.dfy"]
 
+        logger.info("Compiling with mutated Dafny | Command: {command}", command=' '.join(compile_command))
+
         # Prepare environment variable to instrument mutation.
         env_dict = os.environ.copy()
         env_dict[mutant_env_var] = mutant_id
         (exit_code, stdout, stderr, timeout) = run_subprocess(compile_command, timeout_in_seconds, env=env_dict)
+
+        logger.info(stdout.decode('utf-8'))
+        if stderr:
+            logger.error(stderr.decode('utf-8'))
 
         if timeout:
             print("[DETECT] Timeout for mutant compilation")
@@ -196,8 +210,14 @@ class DafnyBackend(Enum):
         # Executes the binary resulting from Dafny compilation.
         execute_binary_command = self.get_execute_command(artifact_dir=dafny_file_dir, file_name=dafny_file_name)
 
+        logger.info("Executing mutated Dafny compilation result | Command: {command}", command=' '.join(execute_binary_command))
+
         runtime_result = run_subprocess(execute_binary_command,
                                         timeout_in_seconds)  # (exit_code, stdout, stderr, timeout)
+
+        logger.info(runtime_result.stdout.decode('utf-8'))
+        if runtime_result.stderr:
+            logger.error(runtime_result.stderr.decode('utf-8'))
 
         if runtime_result.timeout:
             print("[DETECT] Timeout for mutant execution")

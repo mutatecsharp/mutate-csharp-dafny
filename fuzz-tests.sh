@@ -67,7 +67,7 @@ SOURCE_FILE_UNDER_TEST="Backends/SinglePassCodeGenerator.cs"
 
 if [ $ONLY_TEST_UNCOVERED ]; then
   echo "only fuzz mutants unreachable by regression test suite."
-  $FUZZER_SCRIPT "$DRY_RUN" \
+  $FUZZER_SCRIPT $DRY_RUN \
   --source_file_relative_path "$SOURCE_FILE_UNDER_TEST" \
   --passing_tests "$MUTATE_DAFNY_RECORDS_ROOT/passing-tests.txt" \
   --regression_test_trace_dir "$TRACED_ARTIFACT_PATH/execution-trace" \
@@ -76,7 +76,7 @@ else
   # Sanity check: repository mutation analysis recorded
   test -f "$MUTATION_ANALYSIS_PATH"
   echo "fuzz all survived mutants."
-  $FUZZER_SCRIPT "$DRY_RUN" \
+  $FUZZER_SCRIPT $DRY_RUN \
   --source_file_relative_path "$SOURCE_FILE_UNDER_TEST" \
   --output_directory "$FUZZER_OUTPUT_DIR" \
   --mutation_test_result "$MUTATION_ANALYSIS_PATH"

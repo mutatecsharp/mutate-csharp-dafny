@@ -15,4 +15,5 @@ def run_subprocess(args, timeout_seconds, cwd=None, env=None) -> ProcessExecutio
         return ProcessExecutionResult(process.returncode, stdout, stderr, timeout=False)
     except subprocess.TimeoutExpired:
         os.killpg(os.getpgid(process.pid), signal.SIGTERM)
-        return ProcessExecutionResult(process.returncode, None, None, timeout=True)
+        stdout, stderr = process.communicate()
+        return ProcessExecutionResult(process.returncode, stdout, stderr, timeout=True)
