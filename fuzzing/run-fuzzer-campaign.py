@@ -581,7 +581,7 @@ def mutation_guided_test_generation(fuzz_d_reliant_java_binary: Path,  # Java 19
 
 
 def main():
-    logger.add("fuzzing_campaign_{time}.log")
+    logger.add("fuzzing_campaign.log")
 
     if not validate_volume_directory_exists():
         logger.error('Volume directory not found. Please set VOLUME_ROOT environment variable.')
