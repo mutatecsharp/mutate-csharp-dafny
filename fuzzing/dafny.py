@@ -87,6 +87,20 @@ class DafnyBackend(Enum):
 
         raise NotImplementedError("DafnyBackend.execute_command is not implemented for this backend")
 
+    # These errors have appeared in Dafny and not fixed since submission of these bugs by fuzz-d's original author.
+    def get_known_compilation_errors(self) -> List[str]:
+        if self is DafnyBackend.JAVA:
+            return ["incompatible types", "incompatible bounds", "no suitable method", "lambda", "unreachable statement"]
+        if self is DafnyBackend.CSHARP:
+            return ["error CS1628", "error CS0103", "at Microsoft.Dafny.Translator.TrForall_NewValueAssumption(IToken tok, List\`1 boundVars, List\`1 bounds, Expression range, Expression lhs, Expression rhs, Attributes attributes, ExpressionTranslator etran, ExpressionTranslator prevEtran)"]
+        return []
+
+    def get_known_execution_errors(self) -> List[str]:
+        if self is DafnyBackend.JAVA:
+            return ["CodePoint"]
+
+        return []
+
     # Usage: copy Dafny files to the corresponding regular / traced temporary folder.
     # Note: tracing output does not change the semantics of the program, it only creates additional artifact.
     # Hence we pool the behaviour in the same method
@@ -120,12 +134,19 @@ class DafnyBackend(Enum):
             (exit_code, stdout, stderr, timeout) = run_subprocess(compile_command, timeout_in_seconds)
             elapsed_time = time.time() - start_time
 
-        logger.info(stdout.decode('utf-8'))
+        standard_output = stdout.decode('utf-8')
+
+        logger.info(standard_output)
         if stderr:
             logger.error(stderr.decode('utf-8'))
 
         if exit_code != 0:
             program_status = RegularProgramStatus.COMPILER_ERROR
+
+            if any(standard_output.contains(known_error_substring) for known_error_substring
+                   in self.get_known_compilation_errors()):
+                program_status = RegularProgramStatus.KNOWN_BUG
+
             logger.info("[DETECT] Exit code non-zero for regular compilation")
         elif timeout:
             program_status = RegularProgramStatus.COMPILER_ERROR
@@ -149,7 +170,9 @@ class DafnyBackend(Enum):
                                         timeout_in_seconds)  # (exit_code, stdout, stderr, timeout)
         elapsed_time = time.time() - start_time
 
-        logger.info(runtime_result.stdout.decode('utf-8'))
+        standard_output = runtime_result.stdout.decode('utf-8')
+
+        logger.info(standard_output)
         if runtime_result.stderr:
             logger.error(runtime_result.stderr.decode('utf-8'))
 
@@ -158,6 +181,11 @@ class DafnyBackend(Enum):
             logger.info("[DETECT] Timeout for regular execution")
         elif runtime_result.exit_code != 0:
             program_status = RegularProgramStatus.RUNTIME_EXITCODE_NON_ZERO
+
+            if any(standard_output.contains(known_error_substring) for known_error_substring
+                   in self.get_known_execution_errors()):
+                program_status = RegularProgramStatus.KNOWN_BUG
+
             logger.info("[DETECT] Exit code non-zero for regular execution")
         else:
             program_status = RegularProgramStatus.EXPECTED_SUCCESS
@@ -187,7 +215,8 @@ class DafnyBackend(Enum):
         env_dict[mutant_env_var] = mutant_id
         (exit_code, stdout, stderr, timeout) = run_subprocess(compile_command, timeout_in_seconds, env=env_dict)
 
-        logger.info(stdout.decode('utf-8'))
+        standard_output = stdout.decode('utf-8')
+        logger.info(standard_output)
         if stderr:
             logger.error(stderr.decode('utf-8'))
 

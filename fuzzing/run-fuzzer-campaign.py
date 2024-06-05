@@ -282,6 +282,13 @@ def mutation_guided_test_generation(fuzz_d_reliant_java_binary: Path,  # Java 19
                 for target in target_backends
             }  # dict
 
+            # Handle special case where error is known
+            if any(result.program_status == RegularProgramStatus.KNOWN_BUG for result in
+                   regular_execution_results.values()):
+                logger.info("Skipping: found known bug with program seeded by {}.", fuzz_d_fuzzer_seed)
+                continue
+
+
             def persist_failed_program(overall_status_code: RegularProgramStatus, result_list: Dict[
                 DafnyBackend, RegularDafnyCompileResult | RegularDafnyBackendExecutionResult], program_error_dir: Path):
                 # Copy fuzz-d generated program and Dafny compilation artifacts
@@ -300,10 +307,10 @@ def mutation_guided_test_generation(fuzz_d_reliant_java_binary: Path,  # Java 19
                                        for backend, result in result_list.items() if
                                        result.program_status != RegularProgramStatus.EXPECTED_SUCCESS]
                                    }, regular_error_file, indent=4)
-
                 except FileExistsError:
                     logger.info(f"Program with seed {fuzz_d_fuzzer_seed} was independently found to identify "
                                 f"faults in the Dafny compiler.")
+
 
             # 4) Differential testing: compilation of regular Dafny
             if any(result.program_status == RegularProgramStatus.COMPILER_ERROR for _, result in
@@ -320,6 +327,12 @@ def mutation_guided_test_generation(fuzz_d_reliant_java_binary: Path,  # Java 19
                                              timeout_in_seconds=execution_timeout_in_seconds)
                 for target, results in regular_compilation_results.items()
             }
+
+            # Handle special case where error is known
+            if any(result.program_status == RegularProgramStatus.KNOWN_BUG for result in
+                   regular_execution_results.values()):
+                logger.info("Skipping: found known bug with program seeded by {}.", fuzz_d_fuzzer_seed)
+                continue
 
             # 6) Sanity check for non-zero runtime error code
             if any(result.program_status == RegularProgramStatus.RUNTIME_EXITCODE_NON_ZERO for result in

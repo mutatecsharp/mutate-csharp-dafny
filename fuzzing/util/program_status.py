@@ -8,6 +8,7 @@ class RegularProgramStatus(Enum):
     RUNTIME_STDOUT_DIFFER = 5
     RUNTIME_STDERR_DIFFER = 6
     EXPECTED_SUCCESS = 7
+    KNOWN_BUG = 8
 
 class MutantStatus(Enum):
     KILLED_COMPILER_CRASHED = 1
