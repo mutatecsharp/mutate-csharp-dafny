@@ -147,7 +147,7 @@ class DafnyBackend(Enum):
             logger.error(standard_error)
 
         if exit_code != 0:
-            program_status = RegularProgramStatus.COMPILER_ERROR
+            program_status = RegularProgramStatus.COMPILER_EXITCODE_NON_ZERO
 
             if any(known_error_substring in standard_output or known_error_substring in standard_error
                    for known_error_substring in self.get_known_compilation_errors()):
@@ -155,7 +155,7 @@ class DafnyBackend(Enum):
 
             logger.info("[DETECT] Exit code non-zero for regular compilation")
         elif timeout:
-            program_status = RegularProgramStatus.COMPILER_ERROR
+            program_status = RegularProgramStatus.COMPILER_TIMEOUT
             logger.info("[DETECT] Timeout for regular compilation")
         else:
             program_status = RegularProgramStatus.EXPECTED_SUCCESS
