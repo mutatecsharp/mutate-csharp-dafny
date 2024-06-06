@@ -1,3 +1,6 @@
 [submodule "third_party/fuzz-d"]
 	path = third_party/fuzz-d
 	url = git@github.com:khemichew/fuzz-d.git
+[submodule "third_party/perses"]
+	path = third_party/perses
+	url = git@github.com:fuzz-d/perses.git

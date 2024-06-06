@@ -1,5 +1,5 @@
 from pathlib import Path
-from util.constants import INVALID_FILE_NAME_CHARACTERS
+from fuzzing.util.constants import INVALID_FILE_NAME_CHARACTERS
 
 
 def read_passing_tests(tests_list: Path):

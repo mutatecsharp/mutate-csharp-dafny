@@ -15,7 +15,8 @@ from pathlib import Path
 from typing import Dict
 from util.candidate_test import FuzzdCandidateTest
 from util.regular_error_result import RegularErrorResult
-from ..fuzzing.util.run_subprocess import run_subprocess
+from fuzzing.util.run_subprocess import run_subprocess
+from fuzzing.util.program_status import RegularProgramStatus
 
 
 def validate_volume_directory_exists():
@@ -43,20 +44,26 @@ def obtain_env_vars():
     return env_dict
 
 
-# Only focus on reducing programs that are executable.
+# Only focus on reducing programs that are executable and does not time out.
 def retrieve_regular_failed_programs(regular_wrong_code_dir: Path) -> Dict[FuzzdCandidateTest, RegularErrorResult]:
     failed_programs: Dict[FuzzdCandidateTest, RegularErrorResult] = dict()
 
     for program_dir in regular_wrong_code_dir.iterdir():
         error_info = program_dir / "regular_error.json"
         # Verify program directory results from fuzzer-generated tests.
-        if not program_dir.name.startswith("fuzzd") or not error_info.is_file():
+        # logger.debug(program_dir.name)
+        if not program_dir.name.startswith("fuzzd") or not error_info.exists():
+            # logger.debug("cannot find error summary for {}.", program_dir.name)
             continue
         # Verify Dafny program exists in directory.
         if not (program_dir / "fuzz_d_generation" / "main.dfy").exists():
+            # logger.debug("cannot find dafny program for {}.", program_dir.name)
             continue
-        error_result = RegularErrorResult.reconstruct_error_from_disk(program_dir)
+        error_result = RegularErrorResult.reconstruct_error_from_disk(program_dir / "regular_error.json")
         if error_result is None:
+            # logger.debug("cannot reconstruct error summary for {}.", program_dir.name)
+            continue
+        if error_result.overall_status == RegularProgramStatus.RUNTIME_TIMEOUT:
             continue
         failed_programs[FuzzdCandidateTest(program_dir)] = error_result
 
@@ -78,18 +85,18 @@ def reduce_wrong_code_program(perses_dir: Path,
                               reduced_output_dir: Path,
                               timeout_in_seconds: int):
     interesting_script_path = reduced_output_dir / "interesting.py"
-    reduce_candidate_program_path = reduced_output_dir / candidate_program.program_name
+    reduce_candidate_program_path = reduced_output_dir / f"{candidate_program.program_name}.dfy"
 
     # Check if reduction has been performed.
     try:
         reduced_output_dir.mkdir()
         shutil.copy(src=candidate_program.program_path, dst=reduce_candidate_program_path)
     except FileExistsError:
-        logger.log("Skipping reduction for program {} as reduction for the program has been performed.",
+        logger.info("Skipping reduction for program {} as reduction for the program has been performed.",
                    candidate_program.program_dir.name)
         return
 
-    logger.log("Reducing candidate program {} with the expected erratic behaviour: {}.",
+    logger.info("Reducing candidate program {} with the expected erratic behaviour: {}.",
                candidate_program.program_dir.name,
                result.overall_status.name)
 
@@ -97,10 +104,10 @@ def reduce_wrong_code_program(perses_dir: Path,
     perses_template = jinja2.Environment(
         loader=jinja2.FileSystemLoader(
             searchpath=os.path.dirname(os.path.realpath(__file__)))).get_template(
-        "regular_wrong_code_template.py.jinja2")
+        "util/regular_wrong_code_template.py.jinja2")
 
     # Render the interesting script with values.
-    with interesting_script_path.open("w") as template_io:
+    with interesting_script_path.open("w", encoding='utf-8') as template_io:
         rendered_template = perses_template.render(
             latest_dafny=latest_dafny_dir,
             dafny_file_name=candidate_program.program_name,
@@ -112,16 +119,24 @@ def reduce_wrong_code_program(perses_dir: Path,
 
         # Make the interestingness test executable.
         stat = os.stat(interesting_script_path)
-        os.chmod(interesting_script_path, stat.S_IEXEC | stat.st_mode)
+        os.chmod(interesting_script_path, 0o755)
 
         # Commence reduction.
         reduction_command = ["java", "-jar", str(perses_dir / "bazel-bin/src/org/perses/perses_deploy.jar"),
                              "--test-script", str(interesting_script_path),
                              "--input-file", str(reduce_candidate_program_path)]
         process_result = run_subprocess(reduction_command, timeout_seconds=timeout_in_seconds)
+        logger.info(process_result.stdout.decode('utf-8'))
+        stderr = process_result.stderr.decode('utf-8')
+        if stderr:
+            logger.error(stderr)
 
         if process_result.timeout:
             logger.warning("Perses timed out for program {}.", candidate_program.program_name)
+        elif process_result.exit_code != 0:
+            logger.error("Perses failed to reduce program {}.", candidate_program.program_name)
+        else:
+            logger.success("Successfully reduced program {}!", candidate_program.program_name)
 
 
 def main():
@@ -142,10 +157,10 @@ def main():
                         help="Path to the fuzzer output directory containing Dafny programs that uncover bugs in the compiler.")
     parser.add_argument("--latest_dafny", type=Path,
                         help='Path to the Dafny project with the latest commit.')
-    parser.add_argument("regular_dafny", type=Path,
-                        help="Path to the non-mutated Dafny.")
-    parser.add_argument("mutated_dafny", type=Path,
-                        help="Path to the mutated Dafny.")
+    # parser.add_argument("regular_dafny", type=Path,
+    #                     help="Path to the non-mutated Dafny.")
+    # parser.add_argument("mutated_dafny", type=Path,
+    #                     help="Path to the mutated Dafny.")
     parser.add_argument("--perses", type=Path,
                         help="Path to the root directory of the program reducer, Perses.")
     parser.add_argument("--individual_reduction_timeout", type=int, default=43200,
@@ -182,9 +197,7 @@ def main():
     logger.info("latest dafny dir: {}", latest_dafny_dir)
 
     perses_dir = Path(args.perses).resolve()
-    if not perses_dir.is_dir() or not (perses_dir / "perses.bzl").exists():
-        logger.error("Perses has not been cloned. Try to clone it first.")
-        exit(1)
+    logger.info("perses dir: {}", perses_dir)
 
     regular_dafny = None #todo
     mutated_dafny = None #todo
@@ -203,6 +216,7 @@ def main():
         # logger.info("mutated dafny path: {}", str(mutated_dafny))
         # failed_programs = retrieve_mutated_failed_programs(killing_tests_dir)
     else:
+        logger.info("wrong code dir: {}", regular_wrong_code_dir)
         if not regular_wrong_code_dir.is_dir():
             logger.error("Fuzzer output directory is empty. Run the fuzzer to populate programs.",
                          str(fuzzer_output_dir))
@@ -240,21 +254,7 @@ def main():
                                       result=result,
                                       reduced_output_dir=reduced_output_dir,
                                       timeout_in_seconds=args.individual_reduction_timeout)
-    else:  # mutant
-        pass  # TODO
-        # while len(reduction_queue) > 0:
-        #     candidate_program, result = reduction_queue.popleft()
-        #     logger.info("Attempting to reduce mutant program {} ({}/{} candidates)",
-        #                 candidate_program.program_dir.name,
-        #                 programs_reduced,
-        #                 total_programs_to_reduce)
-        #     reduced_output_dir = reduction_artifact_dir / candidate_program.program_dir.name
-        # reduce_mutant_program(perses_dir=perses_dir,
-        #                        candidate_program=candidate_program,
-        #                         latest_dafny=
-        #                        result=result,
-        #                        reduced_output_dir=reduced_output_dir,
-        #                        timeout_in_seconds=args.individual_reduction_timeout)
+            programs_reduced += 1
 
 
 if __name__ == "__main__":

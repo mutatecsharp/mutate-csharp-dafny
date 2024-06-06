@@ -70,6 +70,7 @@ WORKER_COUNT=32
 
 if [ $ONLY_TEST_UNCOVERED ]; then
   echo "only fuzz mutants unreachable by regression test suite."
+  PYTHONPATH=$(pwd) \
   $FUZZER_SCRIPT $DRY_RUN \
   --source_file_relative_path \
   "Backends/SinglePassCodeGenerator.cs" \
@@ -81,6 +82,7 @@ if [ $ONLY_TEST_UNCOVERED ]; then
 else
   echo "fuzz all survived mutants."
   for _ in $(seq 1 $WORKER_COUNT); do
+    PYTHONPATH=$(pwd) \
     $FUZZER_SCRIPT $DRY_RUN \
     --source_file_relative_path \
     "Backends/SinglePassCodeGenerator.cs" \

@@ -18,13 +18,13 @@ from loguru import logger
 
 from dafny import DafnyBackend, RegularDafnyCompileResult, RegularDafnyBackendExecutionResult, \
     MutatedDafnyCompileResult, MutatedDafnyBackendExecutionResult
-from util.program_status import MutantStatus, RegularProgramStatus
-from util.mutation_registry import MutationRegistry
-from util.mutation_test_result import MutationTestResult, MutationTestStatus
-from util.mutant_trace import MutantTrace, RegressionTestsMutantTraces
-from util.run_subprocess import run_subprocess, ProcessExecutionResult
-from util.helper import all_equal, empty_directory
-from util import constants, regression_tests
+from fuzzing.util.program_status import MutantStatus, RegularProgramStatus
+from fuzzing.util.mutation_registry import MutationRegistry
+from fuzzing.util.mutation_test_result import MutationTestResult, MutationTestStatus
+from fuzzing.util.mutant_trace import MutantTrace, RegressionTestsMutantTraces
+from fuzzing.util.run_subprocess import run_subprocess, ProcessExecutionResult
+from fuzzing.util.helper import all_equal, empty_directory
+from fuzzing.util import constants, regression_tests
 
 
 def validate_volume_directory_exists():

@@ -4,8 +4,8 @@ from typing import Dict
 from pathlib import Path
 from loguru import logger
 
-from ...fuzzing.util.program_status import RegularProgramStatus
-from ...fuzzing.dafny import DafnyBackend
+from fuzzing.util.program_status import RegularProgramStatus
+from fuzzing.dafny import DafnyBackend
 
 
 class RegularErrorResult:
@@ -16,7 +16,6 @@ class RegularErrorResult:
                 RegularProgramStatus[entry['program_status']]
             for entry in raw_json['failed_target_backends']
         }
-        self.program_generator: str = raw_json['program_generator']
         if "exit_codes" in raw_json:
             self.exit_codes: Dict[DafnyBackend, int] | None = {
                 DafnyBackend[entry['backend']]: entry['exit_code']

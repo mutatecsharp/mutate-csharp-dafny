@@ -32,7 +32,7 @@ test -f env.sh && echo "mutate-csharp-dafny/env.sh found" || { echo "mutate-csha
 source env.sh
 
 # Sanity check: perses submodule is cloned
-test -f third_party/perses/reduction.bzl && echo "perses cloned" || { echo "perses not found"; exit 1; }
+test -f third_party/perses/.bazelrc && echo "perses cloned" || { echo "perses not found"; exit 1; }
 
 # Sanity check: latest commit Dafny repository is present
 LATEST_COMMIT_DAFNY_ROOT="$VOLUME_ROOT/latest-commit/dafny"
@@ -43,15 +43,19 @@ REDUCER_SCRIPT="$(pwd)/reducer/reduce-program.py"
 test -f "$REDUCER_SCRIPT"
 
 # Obtain records.
-FUZZER_OUTPUT_RECORDS="$VOLUME_ROOT/fuzzer_output"
-test -f "$FUZZER_OUTPUT_RECORDS"
+FUZZER_OUTPUT_RECORDS="$MUTATE_DAFNY_RECORDS_ROOT/fuzzer_output"
+test -d "$FUZZER_OUTPUT_RECORDS"
 
-PERSES_PATH="$(pwd)/third_party/parses"
+PERSES_PATH="$(pwd)/third_party/perses"
+test -d "$PERSES_PATH"
 
 WORKER_COUNT=4
 
 echo "reduce wrong code bugged programs with the regular Dafny compiler."
+PYTHONPATH=$(pwd) \
 $REDUCER_SCRIPT $DRY_RUN \
 --perses "$PERSES_PATH" \
 --latest_dafny "$LATEST_COMMIT_DAFNY_ROOT" \
---fuzzer_output "$MUTATE_DAFNY_RECORDS_ROOT/fuzzer_output" \
+--fuzzer_output "$MUTATE_DAFNY_RECORDS_ROOT/fuzzer_output"
+
+echo "complete."
