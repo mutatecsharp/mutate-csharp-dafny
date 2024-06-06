@@ -5,7 +5,7 @@ from typing import List, Dict, Set, Tuple
 
 class MutantTrace:
     @staticmethod
-    def reconstruct_trace_from_disk(trace_path: Path, source_file_env_var: str | None) -> List[Tuple[str, str]] | None:
+    def reconstruct_trace_from_disk(trace_path: Path, source_file_env_vars: Set[str] | None) -> List[Tuple[str, str]] | None:
         with open(trace_path, 'r') as mutant_trace_io:
             mutants_covered_by_program = mutant_trace_io.readlines()
 
@@ -18,9 +18,9 @@ class MutantTrace:
             return None
 
         # Filter for particular source file under test if specified and discard killed mutants from consideration.
-        if source_file_env_var is not None:
+        if source_file_env_vars is not None:
             mutants_covered_by_program = [(env_var, mutant_id) for (env_var, mutant_id) in
-                                          mutants_covered_by_program if env_var == source_file_env_var]
+                                          mutants_covered_by_program if env_var in source_file_env_vars]
         return mutants_covered_by_program
 
     @staticmethod
@@ -36,7 +36,7 @@ class MutantTrace:
 
 class RegressionTestsMutantTraces:
     @staticmethod
-    def reconstruct_trace_from_disk(trace_dir: Path, test_cases: List[str], source_file_env_var: str | None) \
+    def reconstruct_trace_from_disk(trace_dir: Path, test_cases: List[str], source_file_env_vars: Set[str] | None) \
             -> Dict[str, Set[Tuple[str, str]]] | None:
         execution_traces_of_tests: Dict[str, Set[Tuple[str, str]]] = dict()
 
@@ -54,9 +54,9 @@ class RegressionTestsMutantTraces:
             if any(test_trace is None for test_trace in all_traces):
                 return None
 
-            if source_file_env_var is not None:
+            if source_file_env_vars is not None:
                 all_traces = [(env_var, mutant_id) for env_var, mutant_id in all_traces
-                              if env_var == source_file_env_var]
+                              if env_var in source_file_env_vars]
 
             execution_traces_of_tests[test_name] = set(all_traces)
 

@@ -131,7 +131,7 @@ def mutation_guided_test_generation(fuzz_d_reliant_java_binary: Path,  # Java 19
                                     mutation_registry: MutationRegistry,
                                     mutation_test_results: MutationTestResult | None,
                                     regression_tests_mutant_traces: Dict[str, Set[Tuple[str, str]]] | None,
-                                    source_file_env_var: Path | None,
+                                    source_file_env_vars: List[str] | None,
                                     test_campaign_budget_in_hours: int,
                                     generation_budget_in_seconds: int,
                                     compilation_timeout_in_seconds: int,
@@ -162,15 +162,20 @@ def mutation_guided_test_generation(fuzz_d_reliant_java_binary: Path,  # Java 19
         # Optimisation: if mutation testing results are not available for regression test suite, we consider all
         # covered mutants as killed and only fuzz to kill uncovered mutants. This allows both mutation testing
         # to be run in parallel to fuzzing once execution trace is collected.
-        if source_file_env_var is not None:
-            all_mutants = \
-                set([(source_file_env_var, mutant_id) for mutant_id in
-                     mutation_registry.get_file_registry(str(source_file_env_var)).mutations.keys()])
+        if source_file_env_vars is not None:
+            all_mutants = set()
+            for env_var in source_file_env_vars:
+                ids = mutation_registry.get_file_registry(env_var).mutations.keys()
+                env_var_to_ids = ((env_var, mutant_id) for mutant_id in ids)
+                all_mutants.update(env_var_to_ids)
         else:
-            # concat list of mutations with itertools.chain
-            all_mutations = chain.from_iterable(
-                registry.mutations for registry in mutation_registry.env_var_to_registry.values())
-            all_mutants = set([(source_file_env_var, mutant_id) for mutant_id in all_mutations.keys()])
+            # We consider all mutations that are unreachable from regression tests.
+            all_mutants = []
+            for env_var, registry in mutation_registry.env_var_to_registry:
+                all_mutants.append(
+                    ((env_var, mutant_id) for mutant_id in registry.get_file_registry(env_var).mutations.keys()))
+            all_mutants = chain.from_iterable(all_mutants)
+            all_mutants = set(all_mutants)
         assert len(all_mutants) > 0
 
         covered_by_regression_tests_mutants = set(chain.from_iterable(regression_tests_mutant_traces.values()))
@@ -410,7 +415,7 @@ def mutation_guided_test_generation(fuzz_d_reliant_java_binary: Path,  # Java 19
             mutant_execution_traces = [
                 (target,
                  MutantTrace.reconstruct_trace_from_disk(trace_path=trace_path,
-                                                         source_file_env_var=source_file_env_var))
+                                                         source_file_env_vars=source_file_env_vars))
                 for target, trace_path, _ in traced_compilation_results
             ]
 
@@ -669,10 +674,11 @@ def main():
     parser.add_argument("--regression_test_trace_dir", type=str,
                         help="Path to directory containing all mutant execution traces after "
                              "running the Dafny regression test suite.")
-    parser.add_argument('--mutation_test_result', type=str,
-                        help="Path to mutation testing result of the Dafny regression test suite (.json).")
-    parser.add_argument('--source_file_relative_path', type=str,
-                        help="Optional. If specified, only consider mutants for the specified file.")
+    parser.add_argument('--mutation_test_result', type=str, nargs='+',
+                        help="Path to mutation analysis result(s) of the Dafny regression test suite (.json). "
+                             "The analysis results will be merged if multiple results are passed.")
+    parser.add_argument('--source_file_relative_path', type=str, nargs='+',
+                        help="Optional. If specified, only consider mutants for the specified file(s).")
     parser.add_argument('--compilation_timeout', default=30,
                         help='Maximum second(s) allowed to compile generated program with the non-mutated '
                              'Dafny compiler.')
@@ -734,26 +740,26 @@ def main():
 
     mutation_registry: MutationRegistry = validated_mutant_registry(mutation_registry_path, tracer_registry_path)
 
-    source_file_env_var = None
-    if args.source_file_relative_path is not None:
-        to_find = [registry.env_var for path, registry in
-                   mutation_registry.file_relative_path_to_registry.items()
-                   if path == args.source_file_relative_path]
-        if len(to_find) == 0:
-            logger.error("Cannot find the specified file in mutation registry.")
-            exit(1)
-        elif len(to_find) > 1:
-            logger.error(
-                "Found more than one match for the specified file in mutation registry. "
-                "Mutation registry may be corrupted.")
-            exit(1)
-        source_file_env_var = to_find[0]
+    source_file_env_vars = None
+    if args.source_file_relative_path is not None:  # list
+        for specified_file_path in args.source_file_relative_path:
+            # Sanity check: mutation registry should contain the mutation info for the files specified
+            if specified_file_path not in mutation_registry.file_relative_path_to_registry:
+                logger.error("Cannot find the specified file in mutation registry.")
+                exit(1)
 
-    if args.mutation_test_result is not None:
-        mutation_test_results: MutationTestResult | None = \
-            MutationTestResult.reconstruct_from_disk(Path(args.mutation_test_result).absolute())
+        source_file_env_vars = set(
+            mutation_registry.file_relative_path_to_registry[specified_file_path].env_var for
+            specified_file_path in args.source_file_relative_path)
+
+    if args.mutation_test_result is not None and len(args.mutation_test_result) > 0:
+        mutation_test_results = \
+            [MutationTestResult.reconstruct_from_disk(Path(analysis_results).resolve())
+             for analysis_results in args.mutation_test_result]
+        # Merge all results
+        mutation_test_results = MutationTestResult.merge_results(mutation_test_results)
         regression_tests_mutant_traces = None
-        if mutation_test_results is None:
+        if any(result is None for result in mutation_test_results):
             logger.error("Mutation analysis results not found or corrupted.")
             exit(1)
 
@@ -761,12 +767,12 @@ def main():
         # Retrieve execution trace *iff* mutation test results not available.
         # This is an optimisation to fuzz mutants not reachable by the regression test suite.
         mutation_test_results = None
-        passing_tests = regression_tests.read_passing_tests(Path(args.passing_tests).absolute())
+        passing_tests = regression_tests.read_passing_tests(Path(args.passing_tests).resolve())
         regression_tests_mutant_traces = \
             RegressionTestsMutantTraces.reconstruct_trace_from_disk(
-                trace_dir=Path(args.regression_test_trace_dir).absolute(),
+                trace_dir=Path(args.regression_test_trace_dir).resolve(),
                 test_cases=passing_tests,
-                source_file_env_var=source_file_env_var
+                source_file_env_vars=source_file_env_vars
             )
         if regression_tests_mutant_traces is None:
             logger.error("Mutant trace of regression tests not found or corrupted.")
@@ -775,7 +781,7 @@ def main():
         logger.error("Both regression test execution trace and mutation analysis not made available.")
         exit(1)
 
-    artifact_directory = Path(args.output_directory).absolute()
+    artifact_directory = Path(args.output_directory).resolve()
 
     if not fuzz_d_binary_path.is_file():
         logger.error("fuzz-d binary not found at {path}.", path=str(fuzz_d_binary_path))
@@ -813,8 +819,10 @@ def main():
     logger.info(f"regular wrong code bug output directory: {regular_wrong_code_dir}")
     logger.info("killing tests output directory: {}", killing_tests_dir)
 
-    if source_file_env_var is not None:
-        logger.info(f"Specified file: {args.source_file_relative_path} | Env var: {source_file_env_var}")
+    if source_file_env_vars is not None:
+        logger.info("Specified file(s): {} | Env var(s): {}",
+                    args.source_file_relative_path,
+                    source_file_env_vars)
 
     if args.dry_run:
         logger.info("Dry run complete.")
@@ -853,7 +861,7 @@ def main():
                                     mutation_test_results=mutation_test_results,
                                     mutation_registry=mutation_registry,
                                     regression_tests_mutant_traces=regression_tests_mutant_traces,
-                                    source_file_env_var=source_file_env_var,
+                                    source_file_env_vars=source_file_env_vars,
                                     test_campaign_budget_in_hours=args.test_campaign_timeout,
                                     generation_budget_in_seconds=args.generation_timeout,
                                     compilation_timeout_in_seconds=args.compilation_timeout,

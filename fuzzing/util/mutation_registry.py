@@ -2,6 +2,7 @@ import json
 
 from pathlib import Path
 from loguru import logger
+from typing import Dict
 
 
 class FileMutationRegistry:
@@ -14,8 +15,9 @@ class FileMutationRegistry:
 
 class MutationRegistry:
     def __init__(self, raw_json):
-        self.file_relative_path_to_registry = {relative_path: FileMutationRegistry(registry_json) for
-                                               relative_path, registry_json in raw_json.items()}
+        self.file_relative_path_to_registry: Dict[str, FileMutationRegistry] = {
+            relative_path: FileMutationRegistry(registry_json) for
+            relative_path, registry_json in raw_json.items()}
         self.env_var_to_registry = {registry.env_var: registry for registry in
                                     self.file_relative_path_to_registry.values()}
 
