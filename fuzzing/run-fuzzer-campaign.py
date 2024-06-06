@@ -294,7 +294,9 @@ def mutation_guided_test_generation(fuzz_d_reliant_java_binary: Path,  # Java 19
                 continue
 
             def persist_failed_program(overall_status_code: RegularProgramStatus, result_list: Dict[
-                DafnyBackend, RegularDafnyCompileResult | RegularDafnyBackendExecutionResult], program_error_dir: Path):
+                DafnyBackend, RegularDafnyCompileResult | RegularDafnyBackendExecutionResult], 
+                                       is_runtime: bool,
+                                       program_error_dir: Path):
                 # Copy fuzz-d generated program and Dafny compilation artifacts
                 try:
                     program_error_dir.mkdir()
@@ -312,16 +314,17 @@ def mutation_guided_test_generation(fuzz_d_reliant_java_binary: Path,  # Java 19
                                      "program_status": result.program_status.name}
                                     for backend, result in result_list.items() if
                                     result.program_status != RegularProgramStatus.EXPECTED_SUCCESS],
-                                "program_generator": "fuzz-d",
-                                "exit_codes": [
+                                "program_generator": "fuzz-d"}
+                    if is_runtime:
+                        raw_json["exit_codes"] = [
                                     {"backend": backend.name, "exit_code": result.execution_result.exit_code}
-                                    for backend, result in result_list.items()],
-                                "stdout": [
+                                    for backend, result in result_list.items()]
+                        raw_json["stdout"] = [
                                     {"backend": backend.name, "stdout": result.execution_result.stdout.decode('utf-8')}
-                                    for backend, result in result_list.items()],
-                                "stderr": [
+                                    for backend, result in result_list.items()]
+                        raw_json["stderr"] = [
                                     {"backend": backend.name, "stderr": result.execution_result.stderr.decode('utf-8')}
-                                    for backend, result in result_list.items()]}
+                                    for backend, result in result_list.items()]
 
                     with open(f"{program_error_dir}/regular_error.json", "w") as regular_error_file:
                         json.dump(raw_json, regular_error_file, indent=4)
@@ -333,13 +336,15 @@ def mutation_guided_test_generation(fuzz_d_reliant_java_binary: Path,  # Java 19
             if any(result.program_status == RegularProgramStatus.COMPILER_EXITCODE_NON_ZERO for _, result in
                    regular_compilation_results.items()):
                 persist_failed_program(RegularProgramStatus.COMPILER_EXITCODE_NON_ZERO, regular_compilation_results,
-                                       regular_compilation_error_dir / program_uid)
+                                       is_runtime = False, 
+                                       program_error_dir = regular_compilation_error_dir / program_uid)
                 continue
 
             if any(result.program_status == RegularProgramStatus.COMPILER_TIMEOUT for _, result in
                    regular_compilation_results.items()):
                 persist_failed_program(RegularProgramStatus.COMPILER_TIMEOUT, regular_compilation_results,
-                                       regular_compilation_error_dir / program_uid)
+                                       is_runtime = False, 
+                                       program_error_dir = regular_compilation_error_dir / program_uid)
                 continue
 
             # 5) Execute the generated Dafny program with the executable artifact produced by the default Dafny compiler
@@ -361,28 +366,33 @@ def mutation_guided_test_generation(fuzz_d_reliant_java_binary: Path,  # Java 19
             if any(result.program_status == RegularProgramStatus.RUNTIME_EXITCODE_NON_ZERO for result in
                    regular_execution_results.values()):
                 persist_failed_program(RegularProgramStatus.RUNTIME_EXITCODE_NON_ZERO, regular_execution_results,
-                                       regular_wrong_code_dir / program_uid)
+                                       is_runtime = True, 
+                                       program_error_dir = regular_wrong_code_dir / program_uid)
                 continue
 
             # 7) Differential testing: execution of regular Dafny
             if any(result.execution_result.timeout for target, result in regular_execution_results.items()):
                 persist_failed_program(RegularProgramStatus.RUNTIME_TIMEOUT, regular_execution_results,
-                                       regular_wrong_code_dir / program_uid)
+                                       is_runtime = True, 
+                                       program_error_dir = regular_wrong_code_dir / program_uid)
                 continue
 
             if not all(result.execution_result.exit_code == 0 for result in regular_execution_results.values()):
                 persist_failed_program(RegularProgramStatus.RUNTIME_EXITCODE_DIFFER, regular_execution_results,
-                                       regular_wrong_code_dir / program_uid)
+                                       is_runtime = True, 
+                                       program_error_dir = regular_wrong_code_dir / program_uid)
                 continue
 
             if not all_equal(result.execution_result.stdout for result in regular_execution_results.values()):
                 persist_failed_program(RegularProgramStatus.RUNTIME_STDOUT_DIFFER, regular_execution_results,
-                                       regular_wrong_code_dir / program_uid)
+                                       is_runtime = True, 
+                                       program_error_dir = regular_wrong_code_dir / program_uid)
                 continue
 
             if not all_equal(result.execution_result.stderr for result in regular_execution_results.values()):
                 persist_failed_program(RegularProgramStatus.RUNTIME_STDERR_DIFFER, regular_execution_results,
-                                       regular_wrong_code_dir / program_uid)
+                                       is_runtime = True, 
+                                       program_error_dir = regular_wrong_code_dir / program_uid)
                 continue
 
             valid_programs += 1
@@ -701,7 +711,6 @@ def main():
     # Build fuzz-d (execution of fuzz-d relies on Java version 19)
     java_binary_path = Path(env['JAVA_19_BINARY_PATH'])
     fuzz_d_binary_path = fuzz_d_root / "app" / "build" / "libs" / "app.jar"
-    os.system(f"cd {fuzz_d_root} && ./gradlew build && cd -")
 
     # Regular dafny
     if args.dafny is not None:
@@ -754,15 +763,12 @@ def main():
 
     if args.mutation_test_result is not None and len(args.mutation_test_result) > 0:
         mutation_test_results = \
-            [MutationTestResult.reconstruct_from_disk(Path(analysis_results).resolve())
-             for analysis_results in args.mutation_test_result]
+            [MutationTestResult.reconstruct_from_disk(Path(analysis_result_path).resolve())
+             for analysis_result_path in args.mutation_test_result]
         # Merge all results
         mutation_test_results = MutationTestResult.merge_results(mutation_test_results)
         regression_tests_mutant_traces = None
-        if any(result is None for result in mutation_test_results):
-            logger.error("Mutation analysis results not found or corrupted.")
-            exit(1)
-
+        
     elif args.passing_tests is not None and args.regression_test_trace_dir is not None:
         # Retrieve execution trace *iff* mutation test results not available.
         # This is an optimisation to fuzz mutants not reachable by the regression test suite.

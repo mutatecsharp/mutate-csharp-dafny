@@ -58,6 +58,9 @@ mkdir -p "$FUZZER_OUTPUT_DIR"
 # Copy the killed mutants information from regression testing.
 if [ -n "$DRY_RUN" ]; then
   rsync -a "$VOLUME_ROOT/output/killed_mutants/" "$FUZZER_OUTPUT_DIR/killed_mutants"
+  pushd third_party/fuzz-d
+  ./gradlew build
+  popd
 fi
 
 # Run fuzzing campaign to catch bugs and generate tests that kill mutants.
@@ -81,7 +84,7 @@ else
     $FUZZER_SCRIPT $DRY_RUN \
     --source_file_relative_path \
     "Backends/SinglePassCodeGenerator.cs" \
-    "Backends/Csharp/CSharpCodeGenerator.cs" \
+    "Backends/CSharp/CsharpCodeGenerator.cs" \
     "Backends/JavaScript/JavaScriptCodeGenerator.cs" \
     --output_directory "$FUZZER_OUTPUT_DIR" \
     --mutation_test_result \

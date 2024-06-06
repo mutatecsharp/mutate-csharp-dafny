@@ -16,8 +16,11 @@ class MutationTestStatus(Enum):
 
 class MutationTestResult:
     def __init__(self, raw_json):
-        self.mutant_status = {mutant: MutationTestStatus[status] for mutant, status
-                              in raw_json['MutantStatus'].items() if status != "None"}
+        if 'MutantStatus' in raw_json:
+            self.mutant_status = {mutant: MutationTestStatus[status] for mutant, status
+                                in raw_json['MutantStatus'].items() if status != "None"}
+        else:
+            self.mutant_status = dict()
 
     @staticmethod
     def reconstruct_from_disk(path: Path):
