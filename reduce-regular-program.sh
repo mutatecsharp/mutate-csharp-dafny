@@ -13,10 +13,13 @@ usage() {
 
 DRY_RUN=""
 
-while getopts "hdu" opt; do
+while getopts "hduv" opt; do
     case $opt in
         d)
             DRY_RUN="--dry-run"
+            ;;
+        v)
+            VALIDATE_RESULTS="--validate-results"
             ;;
         h)
             usage
@@ -53,7 +56,7 @@ WORKER_COUNT=4
 
 echo "reduce wrong code bugged programs with the regular Dafny compiler."
 PYTHONPATH=$(pwd) \
-$REDUCER_SCRIPT $DRY_RUN \
+$REDUCER_SCRIPT $DRY_RUN $VALIDATE_RESULTS \
 --perses "$PERSES_PATH" \
 --latest_dafny "$LATEST_COMMIT_DAFNY_ROOT" \
 --fuzzer_output "$MUTATE_DAFNY_RECORDS_ROOT/fuzzer_output"

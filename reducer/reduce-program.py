@@ -247,7 +247,7 @@ def main():
     env = obtain_env_vars()
 
     parser = argparse.ArgumentParser()
-    parser.add_argument("--validate_results", action="store_true",
+    parser.add_argument("--validate-results", action="store_true",
                         help="Check if results are valid.")
     parser.add_argument("--dry-run", action="store_true",
                         help="Perform dry run.")
