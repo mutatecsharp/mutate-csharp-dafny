@@ -63,7 +63,8 @@ def retrieve_regular_failed_programs(regular_wrong_code_dir: Path) -> Dict[Fuzzd
     return failed_programs
 
 
-def reduce_program(candidate_program: FuzzdCandidateTest,
+def reduce_program(perses_dir: Path,
+                   candidate_program: FuzzdCandidateTest,
                    result: RegularErrorResult,
                    reduced_output_dir: Path,
                    timeout_in_seconds: int):
@@ -104,13 +105,13 @@ def reduce_program(candidate_program: FuzzdCandidateTest,
         os.chmod(interesting_script_path, stat.S_IEXEC | stat.st_mode)
 
         # Commence reduction.
-        reduction_command = ["java", "-jar", "--test-script", str(interesting_script_path),
+        reduction_command = ["java", "-jar", str(perses_dir / "bazel-bin/src/org/perses/perses_deploy.jar"),
+                             "--test-script", str(interesting_script_path),
                              "--input-file", str(reduce_candidate_program_path)]
         process_result = run_subprocess(reduction_command, timeout_seconds=timeout_in_seconds)
 
         if process_result.timeout:
             logger.warning("Perses timed out for program {}.", candidate_program.program_name)
-
 
 
 def main():
@@ -139,24 +140,25 @@ def main():
     if args.fuzzer_output is not None:
         fuzzer_output_dir = args.fuzzer_output
     else:
-        fuzzer_output_dir = Path(f"{env['VOLUME_ROOT']}/fuzzer_output")
+        fuzzer_output_dir = Path(f"{env['VOLUME_ROOT']}/fuzzer_output").resolve()
 
-    tests_artifact_dir = fuzzer_output_dir / 'tests'
-    regular_compilation_error_dir = fuzzer_output_dir / 'regular-compilation-errors'
     regular_wrong_code_dir = fuzzer_output_dir / 'regular-wrong-code'
-    killing_tests_artifact_dir = fuzzer_output_dir / 'killing-tests'
 
     # Directory to persist program reduction results.
-    reduction_artifact_dir = Path(f"{env['VOLUME_ROOT']}/reduction_output")
+    reduction_artifact_dir = Path(f"{env['VOLUME_ROOT']}/reduction-output").resolve()
 
     # Validation checks
     if not fuzzer_output_dir.is_dir():
         logger.error("Fuzzer output directory not found at {}.", str(fuzzer_output_dir))
         exit(1)
 
-    if not tests_artifact_dir.is_dir() or not regular_compilation_error_dir.is_dir() or not regular_wrong_code_dir.is_dir() or not killing_tests_artifact_dir.is_dir():
+    if not regular_wrong_code_dir.is_dir():
         logger.error("Fuzzer output directory is empty. Run the fuzzer to populate programs.", str(fuzzer_output_dir))
         exit(1)
+
+    perses_dir = Path(args.perses).resolve()
+    if not perses_dir.is_dir() or not (perses_dir / "perses.bzl").exists():
+        logger.error("Perses has not been cloned. Try to clone it first.")
 
     failed_programs = retrieve_regular_failed_programs(regular_wrong_code_dir)
     logger.info("The following tests are found to uncover bugs in the Dafny compiler:")
@@ -183,7 +185,8 @@ def main():
                     programs_reduced,
                     total_programs_to_reduce)
         reduced_output_dir = reduction_artifact_dir / candidate_program.program_dir.name
-        reduce_program(candidate_program=candidate_program,
+        reduce_program(perses_dir=perses_dir,
+                       candidate_program=candidate_program,
                        result=result,
                        reduced_output_dir=reduced_output_dir,
                        timeout_in_seconds=args.individual_reduction_timeout)
