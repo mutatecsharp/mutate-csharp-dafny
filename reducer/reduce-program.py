@@ -63,11 +63,20 @@ def retrieve_regular_failed_programs(regular_wrong_code_dir: Path) -> Dict[Fuzzd
     return failed_programs
 
 
-def reduce_program(perses_dir: Path,
-                   candidate_program: FuzzdCandidateTest,
-                   result: RegularErrorResult,
-                   reduced_output_dir: Path,
-                   timeout_in_seconds: int):
+def retrieve_mutated_failed_programs(killing_tests_dir: Path):
+    pass
+
+
+def reduce_mutant_program():
+    pass
+
+
+def reduce_wrong_code_program(perses_dir: Path,
+                              latest_dafny_dir: Path,
+                              candidate_program: FuzzdCandidateTest,
+                              result: RegularErrorResult,
+                              reduced_output_dir: Path,
+                              timeout_in_seconds: int):
     interesting_script_path = reduced_output_dir / "interesting.py"
     reduce_candidate_program_path = reduced_output_dir / candidate_program.program_name
 
@@ -87,12 +96,13 @@ def reduce_program(perses_dir: Path,
     # Generate template.
     perses_template = jinja2.Environment(
         loader=jinja2.FileSystemLoader(
-            searchpath=os.path.dirname(os.path.realpath(__file__)))).get_template("perses_template.py.jinja2")
+            searchpath=os.path.dirname(os.path.realpath(__file__)))).get_template(
+        "regular_wrong_code_template.py.jinja2")
 
     # Render the interesting script with values.
     with interesting_script_path.open("w") as template_io:
         rendered_template = perses_template.render(
-            latest_dafny=None,
+            latest_dafny=latest_dafny_dir,
             dafny_file_name=candidate_program.program_name,
             regular_compilation_timeout=30,
             regular_execution_timeout=30,
@@ -126,10 +136,16 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--dry-run", action="store_true",
                         help="Perform dry run.")
+    parser.add_argument("--reduce_mutant", action="store_true",
+                        help="Optional. Reduce mutants if specified.")
     parser.add_argument("--fuzzer_output", type=Path,
                         help="Path to the fuzzer output directory containing Dafny programs that uncover bugs in the compiler.")
-    parser.add_argument("--mutated_dafny", type=Path,
-                        help='Path to the mutated Dafny project.')
+    parser.add_argument("--latest_dafny", type=Path,
+                        help='Path to the Dafny project with the latest commit.')
+    parser.add_argument("regular_dafny", type=Path,
+                        help="Path to the non-mutated Dafny.")
+    parser.add_argument("mutated_dafny", type=Path,
+                        help="Path to the mutated Dafny.")
     parser.add_argument("--perses", type=Path,
                         help="Path to the root directory of the program reducer, Perses.")
     parser.add_argument("--individual_reduction_timeout", type=int, default=43200,
@@ -143,24 +159,56 @@ def main():
         fuzzer_output_dir = Path(f"{env['VOLUME_ROOT']}/fuzzer_output").resolve()
 
     regular_wrong_code_dir = fuzzer_output_dir / 'regular-wrong-code'
+    killing_tests_dir = fuzzer_output_dir / "killing_tests"
 
     # Directory to persist program reduction results.
-    reduction_artifact_dir = Path(f"{env['VOLUME_ROOT']}/reduction-output").resolve()
+    if not args.reduce_mutant:
+        reduction_artifact_dir = Path(f"{env['VOLUME_ROOT']}/wrong-code-reduction-output").resolve()
+    else:
+        reduction_artifact_dir = Path(f"{env['VOLUME_ROOT']}/mutant-reduction-output").resolve()
 
     # Validation checks
     if not fuzzer_output_dir.is_dir():
         logger.error("Fuzzer output directory not found at {}.", str(fuzzer_output_dir))
         exit(1)
 
-    if not regular_wrong_code_dir.is_dir():
-        logger.error("Fuzzer output directory is empty. Run the fuzzer to populate programs.", str(fuzzer_output_dir))
+    if args.latest_dafny:
+        latest_dafny_dir = args.latest_dafny.resolve()
+    else:
+        latest_dafny_dir = Path(f"{env['VOLUME_ROOT']}/latest-commit/dafny").resolve()
+    if not latest_dafny_dir.is_dir():
+        logger.error("Cannot find dafny directory at {}.", str(latest_dafny_dir))
         exit(1)
+    logger.info("latest dafny dir: {}", latest_dafny_dir)
 
     perses_dir = Path(args.perses).resolve()
     if not perses_dir.is_dir() or not (perses_dir / "perses.bzl").exists():
         logger.error("Perses has not been cloned. Try to clone it first.")
+        exit(1)
 
-    failed_programs = retrieve_regular_failed_programs(regular_wrong_code_dir)
+    regular_dafny = None #todo
+    mutated_dafny = None #todo
+
+    if args.reduce_mutant:
+        pass  # TODO
+        # if not args.regular_dafny.is_dir() or not args.mutated_dafny.is_dir():
+        #     logger.error("To reduce mutants, regular and mutated Dafny compiler path should be supplied.")
+        #     exit(1)
+        # if not killing_tests_dir.is_dir():
+        #     logger.error("Killing tests directory not found.")
+        #     exit(1)
+        # regular_dafny = args.regular_dafny.resolve()
+        # mutated_dafny = args.mutated_dafny.resolve()
+        # logger.info("regular dafny path: {}", str(regular_dafny))
+        # logger.info("mutated dafny path: {}", str(mutated_dafny))
+        # failed_programs = retrieve_mutated_failed_programs(killing_tests_dir)
+    else:
+        if not regular_wrong_code_dir.is_dir():
+            logger.error("Fuzzer output directory is empty. Run the fuzzer to populate programs.",
+                         str(fuzzer_output_dir))
+            exit(1)
+        failed_programs = retrieve_regular_failed_programs(regular_wrong_code_dir)
+
     logger.info("The following tests are found to uncover bugs in the Dafny compiler:")
     for program in failed_programs.keys():
         logger.info(program.program_dir.name)
@@ -178,18 +226,35 @@ def main():
     programs_reduced = 0
     total_programs_to_reduce = len(reduction_queue)
 
-    while len(reduction_queue) > 0:
-        candidate_program, result = reduction_queue.popleft()
-        logger.info("Attempting to reduce program {} ({}/{} candidates)",
-                    candidate_program.program_dir.name,
-                    programs_reduced,
-                    total_programs_to_reduce)
-        reduced_output_dir = reduction_artifact_dir / candidate_program.program_dir.name
-        reduce_program(perses_dir=perses_dir,
-                       candidate_program=candidate_program,
-                       result=result,
-                       reduced_output_dir=reduced_output_dir,
-                       timeout_in_seconds=args.individual_reduction_timeout)
+    if not args.reduce_mutant:
+        while len(reduction_queue) > 0:
+            candidate_program, result = reduction_queue.popleft()
+            logger.info("Attempting to reduce regular wrong code bug program {} ({}/{} candidates)",
+                        candidate_program.program_dir.name,
+                        programs_reduced,
+                        total_programs_to_reduce)
+            reduced_output_dir = reduction_artifact_dir / candidate_program.program_dir.name
+            reduce_wrong_code_program(perses_dir=perses_dir,
+                                      latest_dafny_dir=latest_dafny_dir,
+                                      candidate_program=candidate_program,
+                                      result=result,
+                                      reduced_output_dir=reduced_output_dir,
+                                      timeout_in_seconds=args.individual_reduction_timeout)
+    else:  # mutant
+        pass  # TODO
+        # while len(reduction_queue) > 0:
+        #     candidate_program, result = reduction_queue.popleft()
+        #     logger.info("Attempting to reduce mutant program {} ({}/{} candidates)",
+        #                 candidate_program.program_dir.name,
+        #                 programs_reduced,
+        #                 total_programs_to_reduce)
+        #     reduced_output_dir = reduction_artifact_dir / candidate_program.program_dir.name
+        # reduce_mutant_program(perses_dir=perses_dir,
+        #                        candidate_program=candidate_program,
+        #                         latest_dafny=
+        #                        result=result,
+        #                        reduced_output_dir=reduced_output_dir,
+        #                        timeout_in_seconds=args.individual_reduction_timeout)
 
 
 if __name__ == "__main__":
