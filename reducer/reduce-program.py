@@ -99,6 +99,7 @@ def validate_initial_results(candidate_program: FuzzdCandidateTest,
     # Compile and execute with the Dafny compiler to get results.
     with tempfile.TemporaryDirectory() as temp_dir:
         shutil.copytree(src=candidate_program.program_dir / "fuzz_d_generation", dst=temp_dir, dirs_exist_ok=True)
+        subprocess.run(["npm", "install", "bignumber.js"], cwd=temp_dir)  # dependency
 
         regular_compilation_results = {
             target:
