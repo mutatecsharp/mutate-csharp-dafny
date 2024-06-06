@@ -258,9 +258,9 @@ class DafnyBackend(Enum):
         if runtime_result.timeout:
             print("[DETECT] Timeout for mutant execution")
             mutant_status = MutantStatus.KILLED_RUNTIME_TIMEOUT
-        elif runtime_result.exit_code != default_execution_result.exit_code:
+        elif runtime_result.exit_code != 0:
             print("[DETECT] Mutant Exit code differed from regular exit code")
-            mutant_status = MutantStatus.KILLED_RUNTIME_EXITCODE_DIFFER
+            mutant_status = MutantStatus.KILLED_RUNTIME_NON_ZERO
         elif runtime_result.stdout != default_execution_result.stdout:
             print("[DETECT] Mutant stdout differed from regular stdout")
             mutant_status = MutantStatus.KILLED_RUNTIME_STDOUT_DIFFER

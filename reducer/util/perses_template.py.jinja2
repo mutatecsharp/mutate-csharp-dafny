@@ -1,0 +1,105 @@
+#! /usr/bin/env python3.11
+# This script looks out for wrong code bugs that appear during execution time of programs compiled by Dafny.
+
+import os
+import sys
+import shutil
+import signal
+import tempfile
+import subprocess
+
+from itertools import groupby
+
+TARGET_BACKENDS = ['py', 'cs', 'go', 'js']
+
+
+def all_equal(iterable):
+    groups = groupby(iterable)
+    return next(groups, True) and not next(groups, False)
+
+
+def conduct_interestingness_candidate_test(results: dict, check_for: str):
+    if check_for == "RegularProgramStatus.RUNTIME_TIMEOUT":
+        # At least one execution timed out: interesting!
+        if any(timeout for _, _, _, timeout in results.values()):
+            sys.exit(0)
+    elif check_for == "RegularProgramStatus.RUNTIME_EXITCODE_NON_ZERO" or \
+            check_for == "RegularProgramStatus.RUNTIME_EXITCODE_DIFFER":
+        # At least one exit code is non-zero: interesting!
+        if any(exit_code != 0 for exit_code, _, _, _ in results.values()):
+            sys.exit(0)
+    elif check_for == "RegularProgramStatus.RUNTIME_STDOUT_DIFFER":
+        # stdout differ: interesting!
+        if not all_equal(stdout for _, stdout, _, _ in results.values()):
+            sys.exit(0)
+    elif check_for == "RegularProgramStatus.RUNTIME_STDERR_DIFFER":
+        # stderr differ: interesting!
+        if not all_equal(stderr for _, _, stderr, _ in results.values()):
+            sys.exit(0)
+
+    # None of the interesting conditions match.
+    sys.exit(1)
+
+
+def compile_candidate_program(target: str):
+    compile_command = ["dotnet", os.path.join("{{ latest_dafny }}", "Binaries/Dafny.dll"),
+                       "build", "--no-verify", "--allow-warnings", f"--target:{target}",
+                       "{{ dafny_file_name }}.dfy"]
+    compile_process = subprocess.Popen(compile_command, start_new_session=True)
+    try:
+        compile_process.communicate(timeout={{regular_compilation_timeout}})
+    except subprocess.TimeoutExpired:
+        os.killpg(os.getpgid(compile_process.pid), signal.SIGTERM)
+        compile_process.communicate()
+        sys.exit(124)  # Compilation timeout: not interesting.
+
+    if compile_process.returncode != 0:
+        # Dafny compiler could not compile the program: not interesting as we are looking for wrong-code bugs.
+        sys.exit(1)
+
+
+def run_candidate_program_command(target: str, artifact_dir: str, filename: str):
+    if target == 'py':
+        return ["python3", f"{artifact_dir}/{filename}-py/__{filename}__.py"]
+    elif target == 'cs':
+        return ["dotnet", f"{artifact_dir}/{filename}.dll"]
+    elif target == 'go':
+        return [os.path.join(artifact_dir, filename)]
+    elif target == 'js':
+        return ['node', f'{artifact_dir}/{filename}.js']
+    else:
+        sys.exit(1)  # Program status not supported.
+
+
+def run_candidate_program(target: str, program_dir: str) -> tuple:  # (exit_code, stdout, stderr, timeout)
+    execute_command = run_candidate_program_command(target, "{{ dafny_file_name }}")
+    execute_process = subprocess.Popen(execute_command, start_new_session=True,
+                                       stdout=subprocess.PIPE,
+                                       stderr=subprocess.PIPE)
+    try:
+        execute_stdout, execute_stderr = execute_process.communicate(timeout={{regular_execution_timeout}})
+        return execute_process.returncode, execute_stdout, execute_stderr, False
+    except subprocess.TimeoutExpired:
+        os.killpg(os.getpgid(execute_process.pid), signal.SIGTERM)
+        execute_stdout, execute_stderr = execute_process.communicate()
+        return execute_process.returncode, execute_stdout, execute_stderr, True
+
+
+cwd = os.getcwd()
+with tempfile.TemporaryDirectory(dir=cwd) as program_dir:
+    # Copy file into temporary subdirectory.
+    src_file = os.path.join(cwd, "{{ dafny_file_name }}.dfy")
+    dst_file = os.path.join(program_dir, "{{ dafny_file_name }}.dfy")
+    shutil.copy(src=src_file, dst=dst_file)
+
+    # 1) Validate program compiles with the Dafny compiler built from the latest commit
+    for target_backend in TARGET_BACKENDS:
+        compile_candidate_program(target=target_backend, program_dir=program_dir)
+
+    # 2) Run the program compiled by the Dafny compiler built from the latest commit
+    regular_execution_results = {
+        target_backend: run_candidate_program(target=target_backend, program_dir=program_dir)
+        for target_backend in TARGET_BACKENDS
+    }
+
+    conduct_interestingness_candidate_test(regular_execution_results, "{{ overall_error_status }}")

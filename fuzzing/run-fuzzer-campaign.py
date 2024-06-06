@@ -365,7 +365,7 @@ def mutation_guided_test_generation(fuzz_d_reliant_java_binary: Path,  # Java 19
                                        regular_wrong_code_dir / program_uid)
                 continue
 
-            if not all_equal(result.execution_result.exit_code for result in regular_execution_results.values()):
+            if not all(result.execution_result.exit_code == 0 for result in regular_execution_results.values()):
                 persist_failed_program(RegularProgramStatus.RUNTIME_EXITCODE_DIFFER, regular_execution_results,
                                        regular_wrong_code_dir / program_uid)
                 continue
@@ -576,9 +576,9 @@ def mutation_guided_test_generation(fuzz_d_reliant_java_binary: Path,  # Java 19
                                       result_dict=mutant_error_statuses,
                                       killed_mutant_output_dir=mutant_killed_dir,
                                       killing_test_output_dir=killing_test_dir)
-                elif any(mutant_status == MutantStatus.KILLED_RUNTIME_EXITCODE_DIFFER for mutant_status in
+                elif any(mutant_status == MutantStatus.KILLED_RUNTIME_NON_ZERO for mutant_status in
                          mutant_error_statuses.values()):
-                    persist_kill_info(overall_mutant_status=MutantStatus.KILLED_RUNTIME_EXITCODE_DIFFER,
+                    persist_kill_info(overall_mutant_status=MutantStatus.KILLED_RUNTIME_NON_ZERO,
                                       result_dict=mutant_error_statuses,
                                       killed_mutant_output_dir=mutant_killed_dir,
                                       killing_test_output_dir=killing_test_dir)
