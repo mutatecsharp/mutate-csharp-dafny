@@ -562,6 +562,9 @@ def mutation_guided_test_generation(fuzz_d_reliant_java_binary: Path,  # Java 19
                             str(killed_mutant_json_path),
                             str(killing_test_json_path))
 
+                        # Persist generated program in the killing test directory.
+                        shutil.copytree(src=fuzz_d_generation_dir, dst=killing_test_output_dir, dirs_exist_ok=True)
+
                         # Persist additional information into json so we don't have to rerun the program manually
                         raw_json = {"overall_status": overall_mutant_status.name,
                                     "mutant": f"{mutant_file_id}:{mutant_id}",
