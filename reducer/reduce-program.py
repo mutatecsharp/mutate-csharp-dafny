@@ -2,12 +2,14 @@
 # To execute this script, run python -m fuzzing.util.constants $0
 
 import sys
+import stat
 import os
 import shlex
 import shutil
 import subprocess
 import argparse
 import jinja2
+import threading
 
 from collections import deque
 from loguru import logger
@@ -42,6 +44,18 @@ def obtain_env_vars():
     proc.communicate()
 
     return env_dict
+
+
+def read_output(stream, output_type):
+    while True:
+        output = stream.readline()
+        if output:
+            if output_type == "STDOUT":
+                logger.info(output)
+            elif output_type == "STDERR":
+                logger.error(output)
+        else:
+            break
 
 
 # Only focus on reducing programs that are executable and does not time out.
@@ -117,26 +131,37 @@ def reduce_wrong_code_program(perses_dir: Path,
         )
         template_io.write(rendered_template)
 
-        # Make the interestingness test executable.
-        stat = os.stat(interesting_script_path)
-        os.chmod(interesting_script_path, 0o755)
+    # Make the interestingness test executable.
+    st = os.stat(interesting_script_path)
+    os.chmod(interesting_script_path, st.st_mode | stat.S_IEXEC)
 
-        # Commence reduction.
-        reduction_command = ["java", "-jar", str(perses_dir / "bazel-bin/src/org/perses/perses_deploy.jar"),
-                             "--test-script", str(interesting_script_path),
-                             "--input-file", str(reduce_candidate_program_path)]
-        process_result = run_subprocess(reduction_command, timeout_seconds=timeout_in_seconds)
-        logger.info(process_result.stdout.decode('utf-8'))
-        stderr = process_result.stderr.decode('utf-8')
-        if stderr:
-            logger.error(stderr)
-
-        if process_result.timeout:
-            logger.warning("Perses timed out for program {}.", candidate_program.program_name)
-        elif process_result.exit_code != 0:
-            logger.error("Perses failed to reduce program {}.", candidate_program.program_name)
-        else:
-            logger.success("Successfully reduced program {}!", candidate_program.program_name)
+    # Commence reduction.
+    reduction_command = ["java", "-jar", str(perses_dir / "bazel-bin/src/org/perses/perses_deploy.jar"),
+                            "--test-script", str(interesting_script_path),
+                            "--input-file", str(reduce_candidate_program_path)]
+    reduction_process = subprocess.Popen(reduction_command, stdout=subprocess.PIPE,
+                                         stderr=subprocess.PIPE, text=True)
+    
+    # Reduction may take a while - we track real-time progress by printing stdout / stderr.
+    stdout_thread = threading.Thread(target=read_output, args=(reduction_process.stdout, "STDOUT"))
+    stderr_thread = threading.Thread(target=read_output, args=(reduction_process.stderr, "STDERR"))
+    stdout_thread.start()
+    stderr_thread.start()
+    
+    # Wait for the process to complete or timeout.
+    try:
+        reduction_process.wait(timeout=timeout_in_seconds)
+    except subprocess.TimeoutExpired:
+        os.killpg(os.getpgid(reduction_process.pid), signal.SIGTERM)
+        logger.error("Perses timed out for program {}.", candidate_program.program_name)
+    finally:
+        stdout_thread.join()
+        stderr_thread.join()
+        
+    if reduction_process.returncode != 0:
+        logger.error("Perses failed to reduce program {}.", candidate_program.program_name)
+    else:
+        logger.success("Successfully reduced program {}!", candidate_program.program_name)
 
 
 def main():
