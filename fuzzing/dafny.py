@@ -9,7 +9,7 @@ from loguru import logger
 
 from fuzzing.util import constants
 from fuzzing.util.program_status import MutantStatus, RegularProgramStatus
-from fuzzing.util.run_subprocess import run_subprocess, ProcessExecutionResult
+from fuzzing.regutil.run_subprocess import run_subprocess, ProcessExecutionResult
 
 
 @dataclass(frozen=True)

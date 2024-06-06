@@ -84,13 +84,29 @@ def retrieve_regular_failed_programs(regular_wrong_code_dir: Path) -> Dict[Fuzzd
     return failed_programs
 
 
-def retrieve_mutated_failed_programs(killing_tests_dir: Path):
-    pass
-
-
-def reduce_mutant_program():
-    pass
-
+def validate_initial_results(candidate_program: FuzzdCandidateTest,
+                             regular_dafny_dir: Path,
+                             result: RegularErrorResult) -> bool:
+    # We focus on wrong code bugs so this is not interesting.
+    if result.overall_status == RegularProgramStatus.RUNTIME_TIMEOUT or \
+        result.overall_status == RegularProgramStatus.COMPILER_TIMEOUT or \
+            result.overall_status == RegularProgramStatus.COMPILER_EXITCODE_NON_ZERO:
+                return False
+    
+    # Execute to get results.
+    with tempfile
+    
+    results = {
+        backend: backend.regular_execution(backend_artifact_dir=candidate_program.)
+    }
+    
+    
+    
+    
+    if result.overall_status == RegularProgramStatus.RUNTIME_EXITCODE_NON_ZERO:
+        result = {
+            backend: backend.regular_execution
+        }
 
 def reduce_wrong_code_program(perses_dir: Path,
                               latest_dafny_dir: Path,
