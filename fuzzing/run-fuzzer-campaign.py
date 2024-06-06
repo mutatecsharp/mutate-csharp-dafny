@@ -459,6 +459,9 @@ def mutation_guided_test_generation(fuzz_d_reliant_java_binary: Path,  # Java 19
             mutants_killed_by_program = []
             mutants_covered_but_not_killed_by_program = []
 
+            # Randomly shuffle candidate mutants to allow the mutants to be evenly tested concurrently.
+            random.shuffle(candidate_mutants_for_program)
+
             for env_var, mutant_id in candidate_mutants_for_program:
                 if not time_budget_exists(test_campaign_start_time_in_seconds=test_campaign_start_time,
                                           test_campaign_budget_in_hours=test_campaign_budget_in_hours) or \
