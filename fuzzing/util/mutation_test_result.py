@@ -34,7 +34,7 @@ class MutationTestResult:
     def merge_results(results: list):  # list of mutation test results
         # Sanity check: all mutants from the list should be unique
         all_mutants = chain(mutation_test_result.mutant_status.keys() for mutation_test_result in results)
-        if len(set(all_mutants)) != len(list(all_mutants)):
+        if len(set(list(all_mutants))) != len(list(all_mutants)):
             logger.error("Mutation test result contains duplicate mutants.")
             exit(1)
 
