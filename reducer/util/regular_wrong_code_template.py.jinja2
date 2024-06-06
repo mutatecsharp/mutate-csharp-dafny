@@ -2,9 +2,7 @@
 
 import os
 import sys
-import shutil
 import signal
-import tempfile
 import subprocess
 
 from itertools import groupby
@@ -18,20 +16,20 @@ def all_equal(iterable):
 
 
 def conduct_interestingness_candidate_test(results: dict, check_for: str):
-    if check_for == "RegularProgramStatus.RUNTIME_TIMEOUT":
+    if check_for == "RUNTIME_TIMEOUT":
         # At least one execution timed out: interesting!
         if any(timeout for _, _, _, timeout in results.values()):
             sys.exit(0)
-    elif check_for == "RegularProgramStatus.RUNTIME_EXITCODE_NON_ZERO" or \
-            check_for == "RegularProgramStatus.RUNTIME_EXITCODE_DIFFER":
+    elif check_for == "RUNTIME_EXITCODE_NON_ZERO" or \
+            check_for == "RUNTIME_EXITCODE_DIFFER":
         # At least one exit code is non-zero: interesting!
         if any(exit_code != 0 for exit_code, _, _, _ in results.values()):
             sys.exit(0)
-    elif check_for == "RegularProgramStatus.RUNTIME_STDOUT_DIFFER":
+    elif check_for == "RUNTIME_STDOUT_DIFFER":
         # stdout differ: interesting!
         if not all_equal(stdout for _, stdout, _, _ in results.values()):
             sys.exit(0)
-    elif check_for == "RegularProgramStatus.RUNTIME_STDERR_DIFFER":
+    elif check_for == "RUNTIME_STDERR_DIFFER":
         # stderr differ: interesting!
         if not all_equal(stderr for _, _, stderr, _ in results.values()):
             sys.exit(0)
