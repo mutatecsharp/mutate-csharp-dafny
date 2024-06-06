@@ -1,6 +1,6 @@
 #! /usr/bin/env python3.11
 # To execute this script, run python -m fuzzing.util.constants $0
-
+import signal
 import sys
 import stat
 import os
@@ -10,15 +10,18 @@ import subprocess
 import argparse
 import jinja2
 import threading
+import tempfile
 
 from collections import deque
 from loguru import logger
 from pathlib import Path
 from typing import Dict
+
+from fuzzing.dafny import DafnyBackend
 from util.candidate_test import FuzzdCandidateTest
 from util.regular_error_result import RegularErrorResult
-from fuzzing.util.run_subprocess import run_subprocess
 from fuzzing.util.program_status import RegularProgramStatus
+from fuzzing.util.helper import all_equal
 
 
 def validate_volume_directory_exists():
@@ -85,28 +88,81 @@ def retrieve_regular_failed_programs(regular_wrong_code_dir: Path) -> Dict[Fuzzd
 
 
 def validate_initial_results(candidate_program: FuzzdCandidateTest,
-                             regular_dafny_dir: Path,
+                             dafny_binary: Path,
                              result: RegularErrorResult) -> bool:
     # We focus on wrong code bugs so this is not interesting.
     if result.overall_status == RegularProgramStatus.RUNTIME_TIMEOUT or \
-        result.overall_status == RegularProgramStatus.COMPILER_TIMEOUT or \
+            result.overall_status == RegularProgramStatus.COMPILER_TIMEOUT or \
             result.overall_status == RegularProgramStatus.COMPILER_EXITCODE_NON_ZERO:
-                return False
-    
-    # Execute to get results.
-    with tempfile
-    
-    results = {
-        backend: backend.regular_execution(backend_artifact_dir=candidate_program.)
-    }
-    
-    
-    
-    
-    if result.overall_status == RegularProgramStatus.RUNTIME_EXITCODE_NON_ZERO:
-        result = {
-            backend: backend.regular_execution
+        return False
+
+    # Compile and execute with the Dafny compiler to get results.
+    with tempfile.TemporaryDirectory() as temp_dir:
+        shutil.copytree(src=candidate_program.program_dir / "fuzz_d_generation", dst=temp_dir, dirs_exist_ok=True)
+
+        regular_compilation_results = {
+            target:
+                target.regular_compile_to_backend(dafny_binary=dafny_binary,
+                                                  dafny_file_dir=Path(temp_dir),
+                                                  dafny_file_name="main",
+                                                  timeout_in_seconds=60)
+            for target in [DafnyBackend.GO, DafnyBackend.JAVASCRIPT, DafnyBackend.PYTHON, DafnyBackend.CSHARP]
+        }  # dict
+
+        regular_execution_results = {
+            target:
+                target.regular_execution(backend_artifact_dir=Path(temp_dir),
+                                         dafny_file_name="main",
+                                         timeout_in_seconds=60)
+            for target in regular_compilation_results.keys()
         }
+
+        if result.overall_status == RegularProgramStatus.RUNTIME_EXITCODE_DIFFER:
+            return any(result.execution_result.exit_code != 0 for result in regular_execution_results.values())
+        elif result.overall_status == RegularProgramStatus.RUNTIME_STDOUT_DIFFER:
+            return not all_equal(result.execution_result.stdout for result in regular_execution_results.values())
+        elif result.overall_status == RegularProgramStatus.RUNTIME_STDERR_DIFFER:
+            return not all_equal(result.execution_result.stderr for result in regular_execution_results.values())
+
+    return False
+
+
+# Filter out timed-out programs for report.
+def report_validated_results(failed_programs: Dict[FuzzdCandidateTest, RegularErrorResult],
+                             regular_dafny_binary: Path,
+                             latest_commit_dafny_binary: Path):
+    # 1) check for regular dafny
+    filtered_failed_programs = {program: result for program, result in failed_programs.items() if
+                                result.overall_status == RegularProgramStatus.RUNTIME_EXITCODE_DIFFER
+                                or result.overall_status == RegularProgramStatus.RUNTIME_STDOUT_DIFFER
+                                or result.overall_status == RegularProgramStatus.RUNTIME_STDERR_DIFFER}
+
+    validated_fail_regular_dafny = {program: result for program, result in filtered_failed_programs.items() if
+                                    validate_initial_results(program, regular_dafny_binary, result=result)}
+
+    # 2) check for latest commit dafny
+    validated_fail_latest_dafny = {program: result for program, result in filtered_failed_programs.items() if
+                                   validate_initial_results(program, latest_commit_dafny_binary, result=result)}
+
+    # 3) Report correct/wrong results
+    logger.info("The following programs have results valid against the regular Dafny compiler:")
+    for program, result in validated_fail_regular_dafny.items():
+        logger.info("Program {}: {}", program.program_name, result.overall_status)
+
+    logger.warning("The following programs have results *invalid* against the regular Dafny compiler:")
+    for program, result in filtered_failed_programs.items():
+        if program not in validated_fail_regular_dafny:
+            logger.warning("Program {}: {}", program.program_name, result.overall_status)
+
+    logger.info("The following programs have results valid against the latest commit Dafny compiler:")
+    for program, result in validated_fail_latest_dafny.items():
+        logger.info("Program {}: {}", program.program_name, result.overall_status)
+
+    logger.warning("The following programs have results *invalid* against the latest commit Dafny compiler:")
+    for program, result in filtered_failed_programs.items():
+        if program not in validated_fail_latest_dafny:
+            logger.info("Program {}: {}", program.program_name, result.overall_status)
+
 
 def reduce_wrong_code_program(perses_dir: Path,
                               latest_dafny_dir: Path,
@@ -123,12 +179,12 @@ def reduce_wrong_code_program(perses_dir: Path,
         shutil.copy(src=candidate_program.program_path, dst=reduce_candidate_program_path)
     except FileExistsError:
         logger.info("Skipping reduction for program {} as reduction for the program has been performed.",
-                   candidate_program.program_dir.name)
+                    candidate_program.program_dir.name)
         return
 
     logger.info("Reducing candidate program {} with the expected erratic behaviour: {}.",
-               candidate_program.program_dir.name,
-               result.overall_status.name)
+                candidate_program.program_dir.name,
+                result.overall_status.name)
 
     # Generate template.
     perses_template = jinja2.Environment(
@@ -153,17 +209,17 @@ def reduce_wrong_code_program(perses_dir: Path,
 
     # Commence reduction.
     reduction_command = ["java", "-jar", str(perses_dir / "bazel-bin/src/org/perses/perses_deploy.jar"),
-                            "--test-script", str(interesting_script_path),
-                            "--input-file", str(reduce_candidate_program_path)]
+                         "--test-script", str(interesting_script_path),
+                         "--input-file", str(reduce_candidate_program_path)]
     reduction_process = subprocess.Popen(reduction_command, stdout=subprocess.PIPE,
                                          stderr=subprocess.PIPE, text=True)
-    
+
     # Reduction may take a while - we track real-time progress by printing stdout / stderr.
     stdout_thread = threading.Thread(target=read_output, args=(reduction_process.stdout, "STDOUT"))
     stderr_thread = threading.Thread(target=read_output, args=(reduction_process.stderr, "STDERR"))
     stdout_thread.start()
     stderr_thread.start()
-    
+
     # Wait for the process to complete or timeout.
     try:
         reduction_process.wait(timeout=timeout_in_seconds)
@@ -173,7 +229,7 @@ def reduce_wrong_code_program(perses_dir: Path,
     finally:
         stdout_thread.join()
         stderr_thread.join()
-        
+
     if reduction_process.returncode != 0:
         logger.error("Perses failed to reduce program {}.", candidate_program.program_name)
     else:
@@ -190,6 +246,8 @@ def main():
     env = obtain_env_vars()
 
     parser = argparse.ArgumentParser()
+    parser.add_argument("--validate_results", action="store_true",
+                        help="Check if results are valid.")
     parser.add_argument("--dry-run", action="store_true",
                         help="Perform dry run.")
     parser.add_argument("--reduce_mutant", action="store_true",
@@ -240,8 +298,19 @@ def main():
     perses_dir = Path(args.perses).resolve()
     logger.info("perses dir: {}", perses_dir)
 
-    regular_dafny = None #todo
-    mutated_dafny = None #todo
+    regular_dafny_binary = Path(env["REGULAR_DAFNY_ROOT"]) / "Binaries" / "Dafny.dll"
+
+    if not regular_dafny_binary.is_file():
+        logger.error("Regular dafny not built.")
+        exit(1)
+
+    latest_dafny_binary = Path(latest_dafny_dir) /"Binaries" / "Dafny.dll"
+
+    if not latest_dafny_binary.is_file():
+        logger.error("Latest dafny not built.")
+        exit(1)
+
+    mutated_dafny = None  # todo
 
     if args.reduce_mutant:
         pass  # TODO
@@ -268,6 +337,10 @@ def main():
     for program in failed_programs.keys():
         logger.info(program.program_dir.name)
 
+    if args.validate_results:
+        report_validated_results(failed_programs, regular_dafny_binary=regular_dafny_binary,
+                                 latest_commit_dafny_binary=latest_dafny_binary)
+
     if args.dry_run:
         logger.info("Dry run complete.")
         return
@@ -278,6 +351,7 @@ def main():
         reduction_queue.append((candidate_program, result))
 
     logger.info("Found {} programs with execution time erratic behaviours to reduce.", len(reduction_queue))
+
     programs_reduced = 0
     total_programs_to_reduce = len(reduction_queue)
 
