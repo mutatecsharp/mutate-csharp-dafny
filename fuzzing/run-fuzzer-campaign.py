@@ -544,6 +544,7 @@ def mutation_guided_test_generation(fuzz_d_reliant_java_binary: Path,  # Java 19
                 }
 
                 def persist_kill_info(overall_mutant_status: MutantStatus,
+                                      mutant_file_id: str, mutant_id: str,
                                       result_dict: Dict[DafnyBackend, MutantStatus],
                                       killed_mutant_output_dir: Path,
                                       killing_test_output_dir: Path):
@@ -563,6 +564,7 @@ def mutation_guided_test_generation(fuzz_d_reliant_java_binary: Path,  # Java 19
 
                         # Persist additional information into json so we don't have to rerun the program manually
                         raw_json = {"overall_status": overall_mutant_status.name,
+                                    "mutant": f"{mutant_file_id}:{mutant_id}",
                                     "failed_target_backends": [
                                         {"backend": backend.name, "mutant_status": mutant_status.name}
                                         for backend, mutant_status in result_dict.items() if
@@ -582,30 +584,35 @@ def mutation_guided_test_generation(fuzz_d_reliant_java_binary: Path,  # Java 19
                 if any(mutant_status == MutantStatus.KILLED_COMPILER_CRASHED for mutant_status in
                        mutant_error_statuses.values()):
                     persist_kill_info(overall_mutant_status=MutantStatus.KILLED_COMPILER_CRASHED,
+                                      mutant_file_id=env_var, mutant_id=mutant_id,
                                       result_dict=mutant_error_statuses,
                                       killed_mutant_output_dir=mutant_killed_dir,
                                       killing_test_output_dir=killing_test_dir)
                 elif any(mutant_status == MutantStatus.KILLED_COMPILER_TIMEOUT for mutant_status in
                          mutant_error_statuses.values()):
                     persist_kill_info(overall_mutant_status=MutantStatus.KILLED_COMPILER_TIMEOUT,
+                                      mutant_file_id=env_var, mutant_id=mutant_id,
                                       result_dict=mutant_error_statuses,
                                       killed_mutant_output_dir=mutant_killed_dir,
                                       killing_test_output_dir=killing_test_dir)
                 elif any(mutant_status == MutantStatus.KILLED_RUNTIME_NON_ZERO for mutant_status in
                          mutant_error_statuses.values()):
                     persist_kill_info(overall_mutant_status=MutantStatus.KILLED_RUNTIME_NON_ZERO,
+                                      mutant_file_id=env_var, mutant_id=mutant_id,
                                       result_dict=mutant_error_statuses,
                                       killed_mutant_output_dir=mutant_killed_dir,
                                       killing_test_output_dir=killing_test_dir)
                 elif any(mutant_status == MutantStatus.KILLED_RUNTIME_STDOUT_DIFFER for mutant_status in
                          mutant_error_statuses.values()):
                     persist_kill_info(overall_mutant_status=MutantStatus.KILLED_RUNTIME_STDOUT_DIFFER,
+                                      mutant_file_id=env_var, mutant_id=mutant_id,
                                       result_dict=mutant_error_statuses,
                                       killed_mutant_output_dir=mutant_killed_dir,
                                       killing_test_output_dir=killing_test_dir)
                 elif any(mutant_status == MutantStatus.KILLED_RUNTIME_STDERR_DIFFER for mutant_status in
                          mutant_error_statuses.values()):
                     persist_kill_info(overall_mutant_status=MutantStatus.KILLED_RUNTIME_STDERR_DIFFER,
+                                      mutant_file_id=env_var, mutant_id=mutant_id,
                                       result_dict=mutant_error_statuses,
                                       killed_mutant_output_dir=mutant_killed_dir,
                                       killing_test_output_dir=killing_test_dir)
