@@ -1,5 +1,5 @@
 #! /usr/bin/env python3.11
-# To execute this script, run python -m fuzzing.util.constants $0
+# To execute this script, run ./reducer/reduce-program.py from mutate-csharp-dafny
 import signal
 import sys
 import stat
@@ -11,11 +11,12 @@ import argparse
 import jinja2
 import threading
 import tempfile
+import multiprocessing as mp
 
 from collections import deque
 from loguru import logger
 from pathlib import Path
-from typing import Dict
+from typing import Dict, List
 
 from fuzzing.dafny import DafnyBackend
 from util.candidate_test import FuzzdCandidateTest
@@ -89,7 +90,8 @@ def retrieve_regular_failed_programs(regular_wrong_code_dir: Path) -> Dict[Fuzzd
 
 def validate_initial_results(candidate_program: FuzzdCandidateTest,
                              dafny_binary: Path,
-                             result: RegularErrorResult) -> bool:
+                             result: RegularErrorResult,
+                             targets: List[DafnyBackend]) -> bool:
     # We focus on wrong code bugs so this is not interesting.
     if result.overall_status == RegularProgramStatus.RUNTIME_TIMEOUT or \
             result.overall_status == RegularProgramStatus.COMPILER_TIMEOUT or \
@@ -101,22 +103,16 @@ def validate_initial_results(candidate_program: FuzzdCandidateTest,
         shutil.copytree(src=candidate_program.program_dir / "fuzz_d_generation", dst=temp_dir, dirs_exist_ok=True)
         subprocess.run(["npm", "install", "bignumber.js"], cwd=temp_dir)  # dependency
 
-        regular_compilation_results = {
-            target:
-                target.regular_compile_to_backend(dafny_binary=dafny_binary,
-                                                  dafny_file_dir=Path(temp_dir),
-                                                  dafny_file_name="main",
-                                                  timeout_in_seconds=60)
-            for target in [DafnyBackend.GO, DafnyBackend.JAVASCRIPT, DafnyBackend.PYTHON, DafnyBackend.CSHARP]
-        }  # dict
+        def compile_and_then_execute(target: DafnyBackend):
+            target.regular_compile_to_backend(dafny_binary=dafny_binary,
+                                              dafny_file_dir=Path(temp_dir),
+                                              dafny_file_name="main",
+                                              timeout_in_seconds=60)
+            return target.regular_execution(backend_artifact_dir=Path(temp_dir),
+                                                    dafny_file_name="main",
+                                                    timeout_in_seconds=60)
 
-        regular_execution_results = {
-            target:
-                target.regular_execution(backend_artifact_dir=Path(temp_dir),
-                                         dafny_file_name="main",
-                                         timeout_in_seconds=60)
-            for target in regular_compilation_results.keys()
-        }
+        regular_execution_results = {target: compile_and_then_execute(target) for target in targets}
 
         if result.overall_status == RegularProgramStatus.RUNTIME_EXITCODE_DIFFER:
             return any(result.execution_result.exit_code != 0 for result in regular_execution_results.values())
@@ -131,38 +127,30 @@ def validate_initial_results(candidate_program: FuzzdCandidateTest,
 # Filter out timed-out programs for report.
 def report_validated_results(failed_programs: Dict[FuzzdCandidateTest, RegularErrorResult],
                              regular_dafny_binary: Path,
-                             latest_commit_dafny_binary: Path):
-    # 1) check for regular dafny
+                             latest_commit_dafny_binary: Path,
+                             targets: List[DafnyBackend]):
+    # 1) check for wrong code bugs.
     filtered_failed_programs = {program: result for program, result in failed_programs.items() if
                                 result.overall_status == RegularProgramStatus.RUNTIME_EXITCODE_DIFFER
                                 or result.overall_status == RegularProgramStatus.RUNTIME_STDOUT_DIFFER
                                 or result.overall_status == RegularProgramStatus.RUNTIME_STDERR_DIFFER}
 
-    validated_fail_regular_dafny = {program: result for program, result in filtered_failed_programs.items() if
-                                    validate_initial_results(program, regular_dafny_binary, result=result)}
+    def perform_validation(program_result):
+        program, result = program_result
+        regular_valid = validate_initial_results(program, regular_dafny_binary, result=result, targets=targets)
+        latest_commit_valid = validate_initial_results(program, latest_commit_dafny_binary, result=result,
+                                                        targets=targets)
+        return program, regular_valid, latest_commit_valid
 
-    # 2) check for latest commit dafny
-    validated_fail_latest_dafny = {program: result for program, result in filtered_failed_programs.items() if
-                                   validate_initial_results(program, latest_commit_dafny_binary, result=result)}
+    # Use multi-core processing.
+    with mp.Pool(mp.cpu_count()) as pool:
+        validation_results = pool.map(perform_validation, filtered_failed_programs.items())
 
-    # 3) Report correct/wrong results
-    logger.info("The following programs have results valid against the regular Dafny compiler:")
-    for program, result in validated_fail_regular_dafny.items():
-        logger.info("Program {}: {}", program.program_name, result.overall_status)
-
-    logger.warning("The following programs have results *invalid* against the regular Dafny compiler:")
-    for program, result in filtered_failed_programs.items():
-        if program not in validated_fail_regular_dafny:
-            logger.warning("Program {}: {}", program.program_name, result.overall_status)
-
-    logger.info("The following programs have results valid against the latest commit Dafny compiler:")
-    for program, result in validated_fail_latest_dafny.items():
-        logger.info("Program {}: {}", program.program_name, result.overall_status)
-
-    logger.warning("The following programs have results *invalid* against the latest commit Dafny compiler:")
-    for program, result in filtered_failed_programs.items():
-        if program not in validated_fail_latest_dafny:
-            logger.info("Program {}: {}", program.program_name, result.overall_status)
+    # Report correct/wrong results for individual program
+    for program, regular_result, latest_commit_result in validation_results:
+        logger.info("Program {} | Original: {} | Latest commit: {}", program.program_dir,
+                    "VALID" if regular_result else "<red>INVALID</red>",
+                    "VALID" if latest_commit_result else "<red>INVALID</red>")
 
 
 def reduce_wrong_code_program(perses_dir: Path,
@@ -257,10 +245,6 @@ def main():
                         help="Path to the fuzzer output directory containing Dafny programs that uncover bugs in the compiler.")
     parser.add_argument("--latest_dafny", type=Path,
                         help='Path to the Dafny project with the latest commit.')
-    # parser.add_argument("regular_dafny", type=Path,
-    #                     help="Path to the non-mutated Dafny.")
-    # parser.add_argument("mutated_dafny", type=Path,
-    #                     help="Path to the mutated Dafny.")
     parser.add_argument("--perses", type=Path,
                         help="Path to the root directory of the program reducer, Perses.")
     parser.add_argument("--individual_reduction_timeout", type=int, default=43200,
@@ -305,7 +289,7 @@ def main():
         logger.error("Regular dafny not built.")
         exit(1)
 
-    latest_dafny_binary = Path(latest_dafny_dir) /"Binaries" / "Dafny.dll"
+    latest_dafny_binary = Path(latest_dafny_dir) / "Binaries" / "Dafny.dll"
 
     if not latest_dafny_binary.is_file():
         logger.error("Latest dafny not built.")
@@ -339,8 +323,11 @@ def main():
         logger.info(program.program_dir.name)
 
     if args.validate_results:
-        report_validated_results(failed_programs, regular_dafny_binary=regular_dafny_binary,
-                                 latest_commit_dafny_binary=latest_dafny_binary)
+        targets_to_check_against = [DafnyBackend.GO, DafnyBackend.JAVASCRIPT, DafnyBackend.PYTHON, DafnyBackend.CSHARP]
+        report_validated_results(failed_programs,
+                                 regular_dafny_binary=regular_dafny_binary,
+                                 latest_commit_dafny_binary=latest_dafny_binary,
+                                 targets=targets_to_check_against)
 
     if args.dry_run:
         logger.info("Dry run complete.")
