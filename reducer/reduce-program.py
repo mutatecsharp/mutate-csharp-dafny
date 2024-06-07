@@ -11,7 +11,6 @@ import argparse
 import jinja2
 import threading
 import tempfile
-import multiprocessing as mp
 
 from collections import deque
 from loguru import logger
@@ -135,16 +134,14 @@ def report_validated_results(failed_programs: Dict[FuzzdCandidateTest, RegularEr
                                 or result.overall_status == RegularProgramStatus.RUNTIME_STDOUT_DIFFER
                                 or result.overall_status == RegularProgramStatus.RUNTIME_STDERR_DIFFER}
 
-    def perform_validation(program_result):
-        program, result = program_result
+    def perform_validation(program, result):
         regular_valid = validate_initial_results(program, regular_dafny_binary, result=result, targets=targets)
         latest_commit_valid = validate_initial_results(program, latest_commit_dafny_binary, result=result,
                                                         targets=targets)
         return program, regular_valid, latest_commit_valid
 
-    # Use multi-core processing.
-    with mp.Pool(mp.cpu_count()) as pool:
-        validation_results = pool.map(perform_validation, filtered_failed_programs.items())
+    # Todo: Use multi-core processing.
+    validation_results = [perform_validation(program, result) for program, result in filtered_failed_programs.items()]
 
     # Report correct/wrong results for individual program
     for program, regular_result, latest_commit_result in validation_results:
