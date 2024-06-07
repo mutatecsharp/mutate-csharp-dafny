@@ -259,10 +259,7 @@ def main():
     killing_tests_dir = fuzzer_output_dir / "killing_tests"
 
     # Directory to persist program reduction results.
-    if not args.reduce_mutant:
-        reduction_artifact_dir = Path(f"{env['VOLUME_ROOT']}/wrong-code-reduction-output").resolve()
-    else:
-        reduction_artifact_dir = Path(f"{env['VOLUME_ROOT']}/mutant-reduction-output").resolve()
+    reduction_artifact_dir = Path(f"{env['VOLUME_ROOT']}/wrong-code-reduction-output").resolve()
 
     # Validation checks
     if not fuzzer_output_dir.is_dir():
