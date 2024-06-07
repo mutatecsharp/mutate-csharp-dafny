@@ -22,22 +22,26 @@ def conduct_interestingness_candidate_test(results: dict, check_for: str):
         # At least one execution timed out: interesting!
         if any(timeout for _, _, _, timeout in results.values()):
             sys.exit(0)
+        logger.info("RUNTIME_TIMEOUT check failed.")
     elif check_for == "RUNTIME_EXITCODE_NON_ZERO" or \
             check_for == "RUNTIME_EXITCODE_DIFFER":
         logger.info(f"Checking for {check_for}...")
         # At least one exit code is non-zero: interesting!
         if any(exit_code != 0 for exit_code, _, _, _ in results.values()):
             sys.exit(0)
+        logger.info("RUNTIME_EXITCODE_NON_ZERO/RUNTIME_EXITCODE_DIFFER check failed.")
     elif check_for == "RUNTIME_STDOUT_DIFFER":
         logger.info(f"Checking for {check_for}...")
         # stdout differ: interesting!
         if not all_equal(stdout for _, stdout, _, _ in results.values()):
             sys.exit(0)
+        logger.info("RUNTIME_STDOUT_DIFFER check failed.")
     elif check_for == "RUNTIME_STDERR_DIFFER":
         logger.info(f"Checking for {check_for}...")
         # stderr differ: interesting!
         if not all_equal(stderr for _, _, stderr, _ in results.values()):
             sys.exit(0)
+        logger.info("RUNTIME_STDERR_DIFFER check failed.")
 
     # None of the interesting conditions match.
     sys.exit(1)
@@ -47,17 +51,22 @@ def compile_candidate_program(target: str):
     compile_command = ["dotnet", os.path.join("{{ latest_dafny }}", "Binaries/Dafny.dll"),
                        "build", "--no-verify", "--allow-warnings", f"--target:{target}",
                        "{{ dafny_file_name }}.dfy"]
+    logger.info("Compiling program against {} with command: {}", target, ' '.join(compile_command))
     compile_process = subprocess.Popen(compile_command, start_new_session=True)
     try:
         compile_process.communicate(timeout={{regular_compilation_timeout}})
     except subprocess.TimeoutExpired:
         os.killpg(os.getpgid(compile_process.pid), signal.SIGTERM)
         compile_process.communicate()
+        logger.info("Compilation timed out.")
         sys.exit(124)  # Compilation timeout: not interesting.
 
     if compile_process.returncode != 0:
+        logger.info("Compilation failed.")
         # Dafny compiler could not compile the program: not interesting as we are looking for wrong-code bugs.
         sys.exit(1)
+
+    logger.info("Compilation succeeded.")
 
 
 def run_candidate_program_command(target: str, filename: str):
@@ -70,6 +79,7 @@ def run_candidate_program_command(target: str, filename: str):
     elif target == 'js':
         return ['node', f'{filename}.js']
     else:
+        logger.error("target {} not supported! check reduction setup.", target)
         sys.exit(1)  # Program status not supported.
 
 
@@ -86,6 +96,8 @@ def run_candidate_program(target: str) -> tuple:  # (exit_code, stdout, stderr, 
         execute_stdout, execute_stderr = execute_process.communicate()
         return execute_process.returncode, execute_stdout, execute_stderr, True
 
+# 0) Install bignumber.js (dependency.)
+subprocess.run(["npm", "install", "bignumber.js"])
 
 # 1) Validate program compiles with the Dafny compiler built from the latest commit
 for target_backend in TARGET_BACKENDS:
@@ -99,4 +111,5 @@ regular_execution_results = {
 
 conduct_interestingness_candidate_test(regular_execution_results, "{{ overall_error_status }}")
 
+logger.error("execution slipped through interesting-ness check: this should not happen!")
 sys.exit(1)
