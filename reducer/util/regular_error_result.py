@@ -2,7 +2,6 @@ import json
 
 from typing import Dict
 from pathlib import Path
-from loguru import logger
 
 from fuzzing.util.program_status import RegularProgramStatus
 from fuzzing.dafny import DafnyBackend
