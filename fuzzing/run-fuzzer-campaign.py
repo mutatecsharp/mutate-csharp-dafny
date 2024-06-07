@@ -276,6 +276,7 @@ def mutation_guided_test_generation(fuzz_d_reliant_java_binary: Path,  # Java 19
 
             for destination in copy_destinations:
                 shutil.copytree(src=fuzz_d_generation_dir, dst=destination, dirs_exist_ok=True)
+                subprocess.run(["npm", "install", "bignumber.js"], cwd=destination)  # dependency
 
             # 3) Compile the generated Dafny program with the default Dafny compiler to selected target backends
             regular_compilation_results = {
@@ -488,6 +489,7 @@ def mutation_guided_test_generation(fuzz_d_reliant_java_binary: Path,  # Java 19
 
                 empty_directory(mutated_compilation_dir)
                 shutil.copytree(src=fuzz_d_generation_dir, dst=mutated_compilation_dir, dirs_exist_ok=True)
+                subprocess.run(["npm", "install", "bignumber.js"], cwd=mutated_compilation_dir)  # dependency
 
                 # 14) Compile the generated Dafny program with the mutation-instrumented Dafny compiler.
                 mutated_compilation_results = {
