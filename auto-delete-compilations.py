@@ -21,16 +21,19 @@ class DirectoryWatcher(FileSystemEventHandler):
 
     def delete_old_directories(self):
         current_time = time.time()
-        for dirname in os.listdir(self.directory):
-            dir_path = os.path.join(self.directory, dirname)
-            if os.path.isdir(dir_path):
-                dir_age = current_time - os.path.getmtime(dir_path)
-                if dir_age > self.retention_time:
-                    try:
-                        shutil.rmtree(dir_path)
-                        print(f"Deleted directory {dir_path}")
-                    except Exception as e:
-                        print(f"Error deleting directory {dir_path}: {e}")
+        try:
+            for dirname in os.listdir(self.directory):
+                dir_path = os.path.join(self.directory, dirname)
+                if os.path.isdir(dir_path):
+                    dir_age = current_time - os.path.getmtime(dir_path)
+                    if dir_age > self.retention_time:
+                        try:
+                            shutil.rmtree(dir_path)
+                            print(f"Deleted directory {dir_path}")
+                        except Exception as e:
+                            print(f"Error deleting directory {dir_path}: {e}")
+        except Exception:
+            print("Error deleting directory, continuing")
 
 
 def validate_volume_directory_exists():
