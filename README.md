@@ -17,6 +17,7 @@ that can be submitted to the compiler developers.
 to sort test cases by execution time.
 - Test name extractor: When applying `dotnet --list-tests` option, the same list cannot be trivially fed back to the .NET `test` command.
 This escapes the characters necessary to allow the test frameworks to recognise the tests by its name.
+- Random mutant sampler: Given the mutation registry, randomly sample a specified number of mutants for mutation analysis.
 - Examples: `mutate-csharp-dafny` hosts a variety of scripts that showcase how `mutate-csharp` can be utilised to apply mutation analysis
 on a program under test.
 
@@ -49,6 +50,76 @@ At the time of writing, the Dafny compiler is tested with `python3.11`.
 `mutate-csharp-dafny` logs all actions run by the driver using `loguru`. To install `loguru`, run:
 ```sh
 python -m pip install loguru
+```
+
+## Usage
+
+`mutate-csharp-dafny` is designed such that all scripts are run within the root directory of `mutate-csharp-dafny`.
+`mutate-csharp-dafny` requires that all cloned repositories involving `mutate-csharp` to be within a volume directory,
+which can be set with:
+```sh
+export VOLUME_ROOT= {{ folder containing mutate-csharp-dafny }}
+```
+
+For the python scripts, prefix the execution with:
+```sh
+PYTHONPATH=$(pwd) ...
+```
+where the current directory is the root of `mutate-csharp-dafny`.
+
+### Fuzzing
+
+```sh
+
+usage: run-fuzzer-campaign.py [-h] [--dry-run] [--seed SEED] [--fuzz_d FUZZ_D] [--dafny DAFNY]
+                              [--mutated_dafny MUTATED_DAFNY] [--traced_dafny TRACED_DAFNY]
+                              --output_directory OUTPUT_DIRECTORY [--mutation_registry MUTATION_REGISTRY]
+                              [--tracer_registry TRACER_REGISTRY] [--passing_tests PASSING_TESTS]
+                              [--regression_test_trace_dir REGRESSION_TEST_TRACE_DIR]
+                              [--mutation_test_result MUTATION_TEST_RESULT [MUTATION_TEST_RESULT ...]]
+                              [--source_file_relative_path SOURCE_FILE_RELATIVE_PATH [SOURCE_FILE_RELATIVE_PATH ...]]
+                              [--compilation_timeout COMPILATION_TIMEOUT]
+                              [--generation_timeout GENERATION_TIMEOUT]
+                              [--execution_timeout EXECUTION_TIMEOUT]
+                              [--test_campaign_timeout TEST_CAMPAIGN_TIMEOUT]
+
+options:
+  -h, --help            show this help message and exit
+  --dry-run             Perform dry run.
+  --seed SEED           Optional. Seed for random number generator. Useful to reproduce results.
+  --fuzz_d FUZZ_D       Path to the fuzz-d project.
+  --dafny DAFNY         Path to the non-mutated Dafny project.
+  --mutated_dafny MUTATED_DAFNY
+                        Path to the mutated Dafny project.
+  --traced_dafny TRACED_DAFNY
+                        Path to the execution-trace instrumented Dafny project.
+  --output_directory OUTPUT_DIRECTORY
+                        Path to the persisted/temporary interesting programs output directory.
+  --mutation_registry MUTATION_REGISTRY
+                        Path to registry generated after mutating the Dafny codebase (.json).
+  --tracer_registry TRACER_REGISTRY
+                        Path to registry generated after instrumenting the Dafny codebase to trace mutant
+                        executions (.json).
+  --passing_tests PASSING_TESTS
+                        Path to file containing lists of passing tests.
+  --regression_test_trace_dir REGRESSION_TEST_TRACE_DIR
+                        Path to directory containing all mutant execution traces after running the Dafny
+                        regression test suite.
+  --mutation_test_result MUTATION_TEST_RESULT [MUTATION_TEST_RESULT ...]
+                        Path to mutation analysis result(s) of the Dafny regression test suite (.json). The
+                        analysis results will be merged if multiple results are passed.
+  --source_file_relative_path SOURCE_FILE_RELATIVE_PATH [SOURCE_FILE_RELATIVE_PATH ...]
+                        Optional. If specified, only consider mutants for the specified file(s).
+  --compilation_timeout COMPILATION_TIMEOUT
+                        Maximum second(s) allowed to compile generated program with the non-mutated Dafny
+                        compiler.
+  --generation_timeout GENERATION_TIMEOUT
+                        Maximum second(s) allowed to generate program with fuzz-d.
+  --execution_timeout EXECUTION_TIMEOUT
+                        Maximum second(s) allowed to execute fuzz-d generated program compiled by the non-
+                        mutated Dafny compiler.
+  --test_campaign_timeout TEST_CAMPAIGN_TIMEOUT
+                        Test campaign time budget in hour(s).
 ```
 
 
