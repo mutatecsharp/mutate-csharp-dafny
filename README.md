@@ -70,7 +70,7 @@ where the current directory is the root of `mutate-csharp-dafny`.
 ### Fuzzing
 
 ```sh
-
+PYTHONPATH=$(pwd) ./fuzzing/run-fuzzer-campaign.py --help
 usage: run-fuzzer-campaign.py [-h] [--dry-run] [--seed SEED] [--fuzz_d FUZZ_D] [--dafny DAFNY]
                               [--mutated_dafny MUTATED_DAFNY] [--traced_dafny TRACED_DAFNY]
                               --output_directory OUTPUT_DIRECTORY [--mutation_registry MUTATION_REGISTRY]
@@ -122,4 +122,37 @@ options:
                         Test campaign time budget in hour(s).
 ```
 
+### Shrink Dafny programs
+The `reduce-regular-program.sh` is an interestingness test script example and should be modified to suit the 
+conditions required to shrink the program.
 
+
+### Apply escape characters to test names
+
+```sh
+PYTHONPATH=$(pwd) ./parse-tests.py --help
+usage: parse-tests.py [-h] --framework FRAMEWORK --passing-tests PASSING_TESTS
+
+options:
+  -h, --help            show this help message and exit
+  --framework FRAMEWORK
+                        Test target framework. Supports: nunit, mstest.
+  --passing-tests PASSING_TESTS
+                        Path to list of names of passing tests.
+```
+
+### Scripts using `mutate-csharp`
+
+```sh
+./mutate-compiler.sh
+./generate-tracer.sh
+./trace-compiler.sh
+./trace-single-test.sh
+./run-mutation-testing.sh
+```
+
+### Scripts related to the Dafny compiler
+- `overwrite-artifact-output.sh`: Redirects all output from temporary directory to a specified directory.
+- `auto-delete-compilations.py`: Watches the specified directory and deletes all compilation artifacts that are over the maximum time limit that a test/mutant combination can be assessed.
+- `fuzz-tests.sh`: Runs the combined fuzzing / test generation workflow.
+-  `allow-mutation-env-var.py` / `allow-tracer-env-var.py`: Whitelist the specific mutation file ID environment variables based on the mutation registry.
