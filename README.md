@@ -156,3 +156,8 @@ options:
 - `auto-delete-compilations.py`: Watches the specified directory and deletes all compilation artifacts that are over the maximum time limit that a test/mutant combination can be assessed.
 - `fuzz-tests.sh`: Runs the combined fuzzing / test generation workflow.
 -  `allow-mutation-env-var.py` / `allow-tracer-env-var.py`: Whitelist the specific mutation file ID environment variables based on the mutation registry.
+
+
+## License
+`mutate-csharp-dafny` is covered under the terms of the [MIT license](https://en.wikipedia.org/wiki/MIT_License). 
+Contributions are welcome!
