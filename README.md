@@ -67,7 +67,7 @@ PYTHONPATH=$(pwd) ...
 ```
 where the current directory is the root of `mutate-csharp-dafny`.
 
-### Fuzzing
+### Fuzzing and test case generation
 
 ```sh
 PYTHONPATH=$(pwd) ./fuzzing/run-fuzzer-campaign.py --help
