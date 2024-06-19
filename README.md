@@ -1,6 +1,6 @@
 # mutate-csharp-dafny: an application of mutation testing on compilers
 
-As  `mutate-csharp-dafny` applies mutation analysis to _automatically_ generate test cases for the Dafny compiler,
+ `mutate-csharp-dafny` applies mutation analysis to _automatically_ generate test cases for the Dafny compiler,
 and integrates the workflow with existing fuzzing techniques to also simultaneously (and automatically) discover bugs
 in the Dafny compiler.
 
