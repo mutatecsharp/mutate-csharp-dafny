@@ -37,6 +37,9 @@ apt install python3.11
 alias python=python3.11
 python -m pip install loguru
 ```
+Install [dependencies](https://github.com/fuzz-d/fuzz-d) for fuzz-d.
+
+Install [dependencies](https://github.com/fuzz-d/perses) for PERSES.
 
 #### Further details
 
